@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Trend Quiz – Line Charts</title>
+<title>Trend Quiz</title>
 <style>
 :root{--bg:#fff;--card:#f6f7fa;--ink:#111827;--muted:#64748b;--line:#dde0e8;--blue:#1d9bf0;--ok:#16a34a;--bad:#e11d48;--okbg:#dcfce7;--badbg:#ffe4e6;--acc:#b45309;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -9,7 +9,7 @@ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:en
 :root[data-theme="dark"]{--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--line:#334155;--okbg:#14532d;--badbg:#4c0519;--acc:#f59e0b}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+main{max-width:760px;margin:0 auto;padding:12px 16px 40px}
 h1{font-size:22px;margin:0 0 2px}.sub{color:var(--muted);margin:0 0 14px;font-size:14px}
 .bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:6px 0 14px}.bar i{display:block;height:100%;background:var(--blue);transition:width .3s}
 .top{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
@@ -24,11 +24,12 @@ button:hover:not(:disabled){border-color:var(--blue)}button:disabled{cursor:defa
 .next{margin-top:12px;background:var(--blue);border-color:var(--blue);color:#fff;width:100%}
 details{margin:0 0 14px;font-size:14px;color:var(--muted)}summary{cursor:pointer}
 .big{font-size:48px;font-weight:800;margin:10px 0}.rev{margin:8px 0;padding:8px 10px;border-radius:8px;background:var(--card);font-size:14px;display:flex;justify-content:space-between;gap:8px}
+.menu{display:grid;gap:12px}.mc{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:4px;padding:16px;font-size:17px}.sub:empty{display:none}.cap{margin:10px 2px;font-size:15px}.cnt{font-size:13px;color:var(--muted);margin:0 4px 6px}button:disabled{opacity:.45}
+.link{border:none;background:none;color:var(--blue);padding:0;font-weight:600;font-size:14px}.row{display:flex;gap:10px;margin-top:12px}.row .next{margin-top:0;flex:1}.next.alt{background:var(--card);color:var(--ink);border-color:var(--line)}
 @media(max-width:480px){.opts{grid-template-columns:1fr}}
 </style></head><body><main>
-<h1>Trend Quiz: Line Charts</h1>
-<p class="sub">Read each chart and decide what the market is doing at the <b>end</b> of it.</p>
-<details><summary>Rules recap</summary><p>A trend needs 3 directional segments of higher highs &amp; higher lows (uptrend) or lower highs &amp; lower lows (downtrend). Control points sit at the latest higher high/higher low (or lower high/lower low). Closing beyond them <i>with</i> the trend continues it; closing beyond them <i>against</i> the trend breaks it. After a break the market is in consolidation until a new trend forms, measured from the last control point (or the break point).</p></details>
+<h1 id="ttl">Trend Quiz</h1>
+<p class="sub" id="sub"></p>
 <div id="app"></div>
 </main>
 <script>
@@ -36,18 +37,18 @@ details{margin:0 0 14px;font-size:14px;color:var(--muted)}summary{cursor:pointer
 const R=(a,b)=>Math.round(a+Math.random()*(b-a)),NAME={1:'Uptrend','-1':'Downtrend'};
 // Rules engine: market state after each turning point + control points (current or last)
 function analyse(p){
-  let st='C',anchor=0,Z=0,hi,lo,hiI,loI,mn=Infinity,mnI,mx=-Infinity,mxI,out=['C'],cp=null;
+  let st='C',anchor=0,Z=0,hi,lo,hiI,loI,mn=Infinity,mnI,mx=-Infinity,mxI,out=['C'],cp=null,ev=[];
   const snap=()=>{cp={t:st,hi,hiI,lo,loI,Z}};
   const pat=j=>{const [a,b,c,d]=p.slice(j-3,j+1);return a<b&&c>a&&d>b?'U':a>b&&c<a&&d<b?'D':null};
-  const put=(t,j)=>{const [a,b,c,d]=p.slice(j-3,j+1);Z=j-3;if(t==='U'){st='U';hi=d;hiI=j;lo=c;loI=j-1;mn=Infinity}else{st='D';lo=d;loI=j;hi=c;hiI=j-1;mx=-Infinity}snap()};
+  const put=(t,j)=>{const [a,b,c,d]=p.slice(j-3,j+1);Z=j-3;ev.push({k:'t',t,j});if(t==='U'){st='U';hi=d;hiI=j;lo=c;loI=j-1;mn=Infinity}else{st='D';lo=d;loI=j;hi=c;hiI=j-1;mx=-Infinity}snap()};
   for(let i=1;i<p.length;i++){
     const up=p[i]>p[i-1],v=p[i],was=st;
     if(st==='U'){
       if(up){if(v>hi){hi=v;hiI=i;lo=mn;loI=mnI;mn=Infinity;snap()}}
-      else if(v<lo){st='C';anchor=hiI}else if(v<mn){mn=v;mnI=i}
+      else if(v<lo){ev.push({k:'b',i,cp});st='C';anchor=hiI}else if(v<mn){mn=v;mnI=i}
     }else if(st==='D'){
       if(!up){if(v<lo){lo=v;loI=i;hi=mx;hiI=mxI;mx=-Infinity;snap()}}
-      else if(v>hi){st='C';anchor=loI}else if(v>mx){mx=v;mxI=i}
+      else if(v>hi){ev.push({k:'b',i,cp});st='C';anchor=loI}else if(v>mx){mx=v;mxI=i}
     }
     if(st==='C'&&i-3>=anchor){
       let t=pat(i),j=i;
@@ -59,7 +60,7 @@ function analyse(p){
     }
     out.push(st);
   }
-  return {out,cp,cur:st!=='C'};
+  return {out,cp,cur:st!=='C',ev};
 }
 // Last 3 relevant segments: record highs (or lows) since the trend began; the correction is the lowest point between them
 function relevant(p,cp){
@@ -97,13 +98,50 @@ function build(fw){
   const a=analyse(p),st=a.out;
   for(const x of secs){const e=st[x.end],want=('XFK'.includes(x.k))?'C':(x.tr>0?'U':'D');if(e!==want)return null}
   const f=st[st.length-1];
-  return{p,secs,cp:a.cp,cur:a.cur,hard:secs.some(x=>x.k==='T'||x.k==='W'),rel:a.cur?relevant(p,a.cp):null,ans:f==='U'?'Uptrend':f==='D'?'Downtrend':'Consolidation'};
+  return{p,secs,cp:a.cp,cur:a.cur,ev:a.ev,hard:secs.some(x=>x.k==='T'||x.k==='W'),rel:a.cur?relevant(p,a.cp):null,ans:f==='U'?'Uptrend':f==='D'?'Downtrend':'Consolidation'};
 }
-function quiz(){
+// Full chain of relevant segments for a trend, and the story of the chart as breakdown steps
+function chain(p,cp){
+  const sg=cp.t==='U'?1:-1,q=p.map(v=>sg*v),H=sg>0?cp.hiI:cp.loI,rec=[];let m=-Infinity;
+  for(let i=cp.Z+1;i<=H;i++)if(q[i]>q[i-1]&&q[i]>m){rec.push(i);m=q[i]}
+  const lw=(a,b)=>{let k=a;for(let i=a;i<=b;i++)if(q[i]<q[k])k=i;return k};
+  const o=[lw(cp.Z,rec[0])];rec.forEach((r,k)=>{o.push(r);if(k<rec.length-1)o.push(lw(r,rec[k+1]))});return o;
+}
+function phases(c){
+  const sl=[],n=c.p.length-1;let brk=null,cpB=null;
+  for(const e of c.ev){
+    if(e.k==='t'){if(brk!==null){if(e.j-3>brk)sl.push({k:'c',a:brk,b:e.j-3,cp:cpB});brk=null}}
+    else{sl.push({k:'T',cp:e.cp},{k:'B',i:e.i,cp:e.cp});brk=e.i;cpB=e.cp}
+  }
+  if(brk!==null){if(n>brk)sl.push({k:'c',a:brk,b:n,cp:cpB})}else sl.push({k:'T',cp:c.cp});
+  return sl;
+}
+// Candlestick version: every line (point-to-point) becomes 1-3 candles whose bodies tile the move; gaps are read as same-direction candles
+const MB=4;
+function capOf(c){const S=c.p.length-1;if(S>24)return 0;let t=0;for(let k=1;k<=S;k++)t+=Math.max(1,Math.floor(Math.abs(c.p[k]-c.p[k-1])/MB));return t}
+function toCandles(c){
+  const p=c.p,S=p.length-1,cap=[],cnt=[],cd=[],last=[0];
+  for(let k=1;k<=S;k++){cap[k]=Math.max(1,Math.floor(Math.abs(p[k]-p[k-1])/MB));cnt[k]=1}
+  for(let rem=24-S;rem>0;rem--){const ks=[];for(let k=1;k<=S;k++)for(let r=cnt[k];r<cap[k];r++)ks.push(k);if(!ks.length)break;cnt[ks[Math.floor(Math.random()*ks.length)]]++}
+  for(let k=1;k<=S;k++){
+    const a=p[k-1],b=p[k],d=b>a?1:-1,mv=Math.abs(b-a),n=cnt[k],lv=[a];
+    for(let j=1;j<n;j++)lv.push(a+d*mv*(j+(Math.random()-.5)*.3)/n);
+    lv.push(b);
+    for(let j=0;j<n;j++)cd.push({o:lv[j],c:lv[j+1],d});
+    last[k]=cd.length-1;
+  }
+  const gap=new Set();
+  for(let i=0;i<cd.length-1;i++)if(Math.abs(cd[i].c-cd[i].o)>=4.4&&Math.random()<.25){cd[i].c-=cd[i].d*(1+Math.random()*.8);gap.add(i)}
+  c.ptc=last.map((li,k)=>k>0&&gap.has(li)?li+1:li);
+  cd.forEach(k=>{k.hi=Math.max(k.o,k.c)+(Math.random()<.2?0:1+Math.random()*4);k.lo=Math.min(k.o,k.c)-(Math.random()<.2?0:1+Math.random()*4)});
+  c.cd=cd;return c;
+}
+function quiz(m){
   let nu,nd,nc;do{nu=R(2,5);nd=R(2,5);nc=10-nu-nd}while(nc<1||nc>3);
   const want=[...Array(nu).fill('Uptrend'),...Array(nd).fill('Downtrend'),...Array(nc).fill('Consolidation')].sort(()=>Math.random()-.5);
   const ix=want.map((_,i)=>i).sort(()=>Math.random()-.5),f=ix.find(k=>want[k]!=='Consolidation'),hs=[f,...ix.filter(k=>k!==f).slice(0,R(1,2))];
-  return want.map((w,i)=>{const need=hs.includes(i);let c,g=0;do{c=build(i===hs[0]);g++}while((!c||c.ans!==w||(need&&!(i===hs[0]?c.secs.some(x=>x.k==='W'):c.hard)))&&g<30000);while(!c||c.ans!==w)c=build();return c});
+  const out=want.map((w,i)=>{const need=hs.includes(i);let c,g=0;do{c=build(i===hs[0]);g++}while((!c||c.ans!==w||(m==='candle'&&capOf(c)<24)||(need&&!(i===hs[0]?c.secs.some(x=>x.k==='W'):c.hard)))&&g<30000);while(!c||c.ans!==w||(m==='candle'&&capOf(c)<24))c=build();return c});
+  return m==='candle'?out.map(toCandles):out;
 }
 function why(c){
   const x=c.secs[c.secs.length-1],tn=NAME[x.tr].toLowerCase(),hl=x.tr>0?'a higher high and higher low':'a lower high and lower low';
@@ -117,36 +155,88 @@ function why(c){
    F:`After the break there is only a single counter-segment. Three directional segments haven't formed yet, so the market is still in consolidation.`}[x.k];
 }
 //UI
-let Q=quiz(),i=0,score=0,log=[];
-const $=document.getElementById('app');
+let mode=null,Q=[],i=0,score=0,log=[],step=0;
+const $=document.getElementById('app'),TT=document.getElementById('ttl'),SB=document.getElementById('sub');
+const MODES={line:'Line Chart',candle:'Candlestick Chart'},NM=t=>t==='U'?['Higher High','Higher Low']:['Lower High','Lower Low'];
+function menu(){
+  mode=null;TT.textContent='Trend Quiz';SB.textContent='Choose a quiz.';
+  $.innerHTML=`<div class="menu">${Object.keys(MODES).map(k=>`<button class="mc" data-m="${k}">${MODES[k]}</button>`).join('')}</div>`;
+  $.querySelectorAll('.mc').forEach(b=>b.onclick=()=>start(b.dataset.m));
+}
+function start(m){mode=m;Q=quiz(m);i=0;score=0;log=[];TT.textContent='Trend Quiz: '+MODES[m];SB.textContent='';show()}
+function geom(c){
+  const W=700,H=470,L=c.cd,n=c.p.length,mn=L?Math.min(...L.map(k=>k.lo)):Math.min(...c.p),mx=L?Math.max(...L.map(k=>k.hi)):Math.max(...c.p);
+  const N=L?L.length:n,x0=L?48:40,pt=(W-2*x0)/Math.max(N-1,1);
+  return{W,H,L,pt,Y:v=>30+(mx-v)*(H-100)/(mx-mn),X:k=>x0+(L?c.ptc[k]:k)*pt,x0};
+}
+function base(c,G,op){
+  let g=`<g opacity="${op}">`;
+  if(G.L){const bw=Math.min(24,G.pt*.64);
+    G.L.forEach((k,j)=>{const x=G.x0+j*G.pt,col=k.d>0?'#22a95f':'#e43e53',t=G.Y(Math.max(k.o,k.c)),b=G.Y(Math.min(k.o,k.c));
+      g+=`<line x1="${x}" x2="${x}" y1="${G.Y(k.hi)}" y2="${G.Y(k.lo)}" stroke="${col}" stroke-width="2.5"/><rect x="${x-bw/2}" y="${t}" width="${bw}" height="${Math.max(2,b-t)}" fill="${col}"/>`})}
+  else g+=`<polyline fill="none" stroke="var(--ink)" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" points="${c.p.map((v,k)=>G.X(k)+','+G.Y(v)).join(' ')}"/>`;
+  return g+'</g>';
+}
+function path(c,G,idx,col,w){
+  const pts=idx.map(k=>G.X(k)+','+G.Y(c.p[k])).join(' '),s=`fill="none" stroke-linejoin="round" stroke-linecap="round" points="${pts}"`;
+  return (G.L?`<polyline ${s} stroke="var(--card)" stroke-width="${w+5}"/>`:'')+`<polyline ${s} stroke="${col}" stroke-width="${w}"/>`;
+}
+function ctl(c,G,cp,cur){
+  const nm=NM(cp.t),col=cur?'#f59e0b':'#94a3b8',tc=cur?'var(--acc)':'var(--muted)';let g='';
+  [[cp.hi,cp.hiI,nm[0],-9],[cp.lo,cp.loI,nm[1],21]].forEach(([v,k,t,dy])=>{const x=G.X(k),y=G.Y(v);
+    g+=`<line x1="${x}" x2="${G.W-12}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2.5" stroke-dasharray="8 6"/><circle cx="${x}" cy="${y}" r="6" fill="${col}" stroke="var(--card)" stroke-width="2"/><text x="${G.W-14}" y="${y+dy}" text-anchor="end" font-size="15" font-weight="700" fill="${tc}" stroke="var(--card)" stroke-width="4" style="paint-order:stroke">${cur?'':'Previous '}Control Point (${t})</text>`});
+  return g;
+}
+const legend=(G,col,t)=>`<line x1="40" x2="72" y1="${G.H-22}" y2="${G.H-22}" stroke="${col}" stroke-width="6" stroke-linecap="round"/><text x="80" y="${G.H-16}" font-size="15" font-weight="700" fill="${col}">${t}</text>`;
+const wrap=(G,c,g)=>`<svg viewBox="0 0 ${G.W} ${G.H}" role="img" aria-label="${G.L?'Candlestick':'Line'} chart">${g}</svg>`;
 function chart(c,reveal){
-  const W=700,H=338,n=c.p.length,mn=Math.min(...c.p),mx=Math.max(...c.p);
-  const X=k=>40+k*(W-80)/(n-1),Y=v=>30+(mx-v)*250/(mx-mn);
-  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Line chart"><polyline fill="none" stroke="var(--ink)" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" points="${c.p.map((v,k)=>X(k)+','+Y(v)).join(' ')}"/>`;
-  if(reveal&&c.rel){const col=c.cp.t==='U'?'#22c55e':'#ef4444';g+=`<polyline fill="none" stroke="${col}" stroke-width="6" stroke-linejoin="round" stroke-linecap="round" points="${c.rel.map(k=>X(k)+','+Y(c.p[k])).join(' ')}"/><line x1="40" x2="72" y1="316" y2="316" stroke="${col}" stroke-width="6" stroke-linecap="round"/><text x="80" y="322" font-size="15" font-weight="700" fill="${col}">Last 3 relevant segments</text>`}
-  if(reveal){const cp=c.cp,nm=cp.t==='U'?['Higher High','Higher Low']:['Lower High','Lower Low'],col=c.cur?'#f59e0b':'#94a3b8',tc=c.cur?'var(--acc)':'var(--muted)';
-    [[cp.hi,cp.hiI,nm[0],-9],[cp.lo,cp.loI,nm[1],21]].forEach(([v,k,t,dy])=>{const x=X(k),y=Y(v);
-      g+=`<line x1="${x}" x2="${W-12}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2.5" stroke-dasharray="8 6"/><circle cx="${x}" cy="${y}" r="6" fill="${col}" stroke="var(--card)" stroke-width="2"/><text x="${W-14}" y="${y+dy}" text-anchor="end" font-size="15" font-weight="700" fill="${tc}" stroke="var(--card)" stroke-width="4" style="paint-order:stroke">${c.cur?'':'Previous '}Control Point (${t})</text>`})}
-  return g+'</svg>';
+  const G=geom(c);let g=base(c,G,1);
+  if(reveal&&c.rel){const col=c.cp.t==='U'?'#22c55e':'#ef4444';g+=path(c,G,c.rel,col,6)+legend(G,col,'Last 3 relevant segments')}
+  if(reveal)g+=ctl(c,G,c.cp,c.cur);
+  return wrap(G,c,g);
+}
+// Breakdown slideshow: one picture per trend, per break, and per run of movements that do not form a trend
+const TC=t=>t==='U'?'#22c55e':'#ef4444',TN=t=>t==='U'?'uptrend':'downtrend';
+function slide(c,s){
+  const G=geom(c);let g=base(c,G,.28);
+  if(s.k==='T'){const ch=chain(c.p,s.cp);g+=path(c,G,ch,TC(s.cp.t),6)+ctl(c,G,s.cp,true)+legend(G,TC(s.cp.t),'Relevant segments of the '+TN(s.cp.t))}
+  else if(s.k==='B'){g+=path(c,G,chain(c.p,s.cp),TC(s.cp.t),4)+ctl(c,G,s.cp,true)+path(c,G,[s.i-1,s.i],'#8b5cf6',8)+legend(G,'#8b5cf6','Break: the closing segment')}
+  else{const idx=[];for(let k=s.a;k<=s.b;k++)idx.push(k);g+=path(c,G,idx,'#1d9bf0',6)+ctl(c,G,s.cp,false)+legend(G,'#1d9bf0','Movements that do not form a trend')}
+  return wrap(G,c,g);
+}
+function caption(c,s,last){
+  const nm=NM(s.cp.t);let t;
+  if(s.k==='T')t=`${TN(s.cp.t)[0].toUpperCase()+TN(s.cp.t).slice(1)}: only the relevant segments are shown (${chain(c.p,s.cp).length-1} in total). Control points sit at the ${nm[0]} and ${nm[1]}.`;
+  else if(s.k==='B')t=`Break: the segment closed ${s.cp.t==='U'?'below the Higher Low':'above the Lower High'}, against the ${TN(s.cp.t)}, so the ${TN(s.cp.t)} is broken.`;
+  else t=`These movements after the break do not create a new trend (three directional segments of ${s.cp.t==='U'?'lower highs and lower lows, or higher highs and higher lows':'higher highs and higher lows, or lower highs and lower lows'} have not formed), so the market is in consolidation.`;
+  return t+(last?` Result: ${c.ans}.`:'');
+}
+function bd(){
+  const c=Q[i],sl=c.sl||(c.sl=phases(c)),s=sl[step];
+  document.getElementById('bdv').innerHTML=`<div class="card"><div class="cnt">Breakdown · step ${step+1} of ${sl.length}</div>${slide(c,s)}</div><p class="cap">${caption(c,s,step===sl.length-1)}</p><div class="row"><button class="next alt" id="bp" ${step?'':'disabled'}>‹ Previous</button><button class="next alt" id="bn" ${step<sl.length-1?'':'disabled'}>Next ›</button></div>`;
+  document.getElementById('bp').onclick=()=>{step--;bd()};document.getElementById('bn').onclick=()=>{step++;bd()};
 }
 function show(){
   if(i>=10){
-    $.innerHTML=`<div class="card" style="text-align:center"><div class="sub">Quiz complete</div><div class="big">${score} / 10</div><p>${score>=9?'Excellent trend reading.':score>=7?'Solid. Review the questions you missed below.':'Keep practising: revisit the control point and break rules.'}</p></div>`+
-    log.map((l,k)=>`<div class="rev"><span>Q${k+1}: ${l.ans}</span><span>${l.ok?'✓':'✗ you chose '+l.pick}</span></div>`).join('')+`<button class="next" id="again">Try a new set</button>`;
-    document.getElementById('again').onclick=()=>{Q=quiz();i=0;score=0;log=[];show()};return;
+    $.innerHTML=`<div class="card" style="text-align:center"><div class="sub">${MODES[mode]} quiz complete</div><div class="big">${score} / 10</div><p>${score>=9?'Excellent trend reading.':score>=7?'Solid. Review the questions you missed below.':'Keep practising: revisit the control point and break rules.'}</p></div>`+
+    log.map((l,k)=>`<div class="rev"><span>Q${k+1}: ${l.ans}</span><span>${l.ok?'✓':'✗ you chose '+l.pick}</span></div>`).join('')+
+    `<div class="row"><button class="next" id="again">Try a new set</button><button class="next alt" id="back">Back to quiz selection</button></div>`;
+    document.getElementById('again').onclick=()=>start(mode);document.getElementById('back').onclick=menu;return;
   }
   const c=Q[i];
-  $.innerHTML=`<div class="top"><span>Question ${i+1} of 10</span><span>Score ${score}</span></div><div class="bar"><i style="width:${i*10}%"></i></div>
+  $.innerHTML=`<div class="top"><span>Question ${i+1} of 10</span><span><button class="link" id="mn">Menu</button> · Score ${score}</span></div><div class="bar"><i style="width:${i*10}%"></i></div>
   <div class="card" id="ch">${chart(c,false)}</div><div class="q">What state is the market in at the end of this chart?</div>
-  <div class="opts">${['Uptrend','Downtrend','Consolidation'].map(o=>`<button data-o="${o}">${o}</button>`).join('')}</div><div id="fb"></div>`;
+  <div class="opts">${['Uptrend','Downtrend','Consolidation'].map(o=>`<button data-o="${o}">${o}</button>`).join('')}</div><div id="fb"></div><div id="bdv"></div>`;
+  document.getElementById('mn').onclick=menu;
   $.querySelectorAll('.opts button').forEach(b=>b.onclick=()=>answer(b.dataset.o));
 }
 function answer(o){
-  const c=Q[i],ok=o===c.ans;if(ok)score++;log.push({ans:c.ans,pick:o,ok});
+  const c=Q[i],ok=o===c.ans;if(ok)score++;log.push({ans:c.ans,pick:o,ok});step=0;
   $.querySelectorAll('.opts button').forEach(b=>{b.disabled=true;if(b.dataset.o===c.ans)b.classList.add('ok');else if(b.dataset.o===o)b.classList.add('bad')});
   document.getElementById('ch').innerHTML=chart(c,true);
-  document.getElementById('fb').innerHTML=`<div class="fb"><b>${ok?'Correct!':'Not quite.'}</b> The answer is <b>${c.ans}</b>. ${why(c)} ${c.cur?'Orange lines mark the current control points; the coloured line marks the last 3 relevant segments.':'Grey lines mark the last control points of the broken trend.'}</div><button class="next" id="nx">${i<9?'Next question':'See results'}</button>`;
+  document.getElementById('fb').innerHTML=`<div class="fb"><b>${ok?'Correct!':'Not quite.'}</b> The answer is <b>${c.ans}</b>. ${why(c)} ${c.cur?'Orange lines mark the current control points; the coloured line marks the last 3 relevant segments.':'Grey lines mark the last control points of the broken trend.'}</div><div class="row"><button class="next alt" id="bdb">Breakdown</button><button class="next" id="nx">${i<9?'Next question':'See results'}</button></div>`;
+  document.getElementById('bdb').onclick=()=>{const v=document.getElementById('bdv');if(v.innerHTML){v.innerHTML=''}else{step=0;bd();v.scrollIntoView({behavior:'smooth',block:'nearest'})}};
   document.getElementById('nx').onclick=()=>{i++;show()};
 }
-show();
+menu();
 </script></body></html>
