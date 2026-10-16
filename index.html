@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trend Quiz – Line Charts</title>
+<style>
+:root{--bg:#fff;--card:#f6f7fa;--ink:#111827;--muted:#64748b;--line:#dde0e8;--blue:#1d9bf0;--ok:#16a34a;--bad:#e11d48;--okbg:#dcfce7;--badbg:#ffe4e6;--acc:#b45309;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--line:#334155;--okbg:#14532d;--badbg:#4c0519;--acc:#f59e0b}}
+:root[data-theme="dark"]{--bg:#0f172a;--card:#1e293b;--ink:#f1f5f9;--muted:#94a3b8;--line:#334155;--okbg:#14532d;--badbg:#4c0519;--acc:#f59e0b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 2px}.sub{color:var(--muted);margin:0 0 14px;font-size:14px}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:6px 0 14px}.bar i{display:block;height:100%;background:var(--blue);transition:width .3s}
+.top{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+svg{width:100%;height:auto;display:block}
+.q{font-weight:600;margin:16px 0 10px}
+.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+button{font:inherit;font-weight:600;padding:12px 8px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button:hover:not(:disabled){border-color:var(--blue)}button:disabled{cursor:default}
+.ok{border-color:var(--ok)!important;background:var(--okbg)}.bad{border-color:var(--bad)!important;background:var(--badbg)}
+.fb{margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--card);border-left:4px solid var(--blue)}
+.next{margin-top:12px;background:var(--blue);border-color:var(--blue);color:#fff;width:100%}
+details{margin:0 0 14px;font-size:14px;color:var(--muted)}summary{cursor:pointer}
+.big{font-size:48px;font-weight:800;margin:10px 0}.rev{margin:8px 0;padding:8px 10px;border-radius:8px;background:var(--card);font-size:14px;display:flex;justify-content:space-between;gap:8px}
+@media(max-width:480px){.opts{grid-template-columns:1fr}}
+</style></head><body><main>
+<h1>Trend Quiz: Line Charts</h1>
+<p class="sub">Read each chart and decide what the market is doing at the <b>end</b> of it.</p>
+<details><summary>Rules recap</summary><p>A trend needs 3 directional segments of higher highs &amp; higher lows (uptrend) or lower highs &amp; lower lows (downtrend). Control points sit at the latest higher high/higher low (or lower high/lower low). Closing beyond them <i>with</i> the trend continues it; closing beyond them <i>against</i> the trend breaks it. After a break the market is in consolidation until a new trend forms, measured from the last control point (or the break point).</p></details>
+<div id="app"></div>
+</main>
+<script>
+//LOGIC
+const R=(a,b)=>Math.round(a+Math.random()*(b-a)),NAME={1:'Uptrend','-1':'Downtrend'};
+// Rules engine: market state after each turning point + control points (current or last)
+function analyse(p){
+  let st='C',anchor=0,Z=0,hi,lo,hiI,loI,mn=Infinity,mnI,mx=-Infinity,mxI,out=['C'],cp=null;
+  const snap=()=>{cp={t:st,hi,hiI,lo,loI,Z}};
+  const pat=j=>{const [a,b,c,d]=p.slice(j-3,j+1);return a<b&&c>a&&d>b?'U':a>b&&c<a&&d<b?'D':null};
+  const put=(t,j)=>{const [a,b,c,d]=p.slice(j-3,j+1);Z=j-3;if(t==='U'){st='U';hi=d;hiI=j;lo=c;loI=j-1;mn=Infinity}else{st='D';lo=d;loI=j;hi=c;hiI=j-1;mx=-Infinity}snap()};
+  for(let i=1;i<p.length;i++){
+    const up=p[i]>p[i-1],v=p[i],was=st;
+    if(st==='U'){
+      if(up){if(v>hi){hi=v;hiI=i;lo=mn;loI=mnI;mn=Infinity;snap()}}
+      else if(v<lo){st='C';anchor=hiI}else if(v<mn){mn=v;mnI=i}
+    }else if(st==='D'){
+      if(!up){if(v<lo){lo=v;loI=i;hi=mx;hiI=mxI;mx=-Infinity;snap()}}
+      else if(v>hi){st='C';anchor=loI}else if(v>mx){mx=v;mxI=i}
+    }
+    if(st==='C'&&i-3>=anchor){
+      let t=pat(i),j=i;
+      if(!t&&was!=='C'){for(j=i-1;j>=anchor+3;j--)if(pat(j)===(was==='U'?'D':'U')){t=pat(j);break}}
+      if(t&&j<i){put(t,j);out.length=j;out.push(st);i=j;continue}
+      if(t)put(t,i);
+      
+      
+    }
+    out.push(st);
+  }
+  return {out,cp,cur:st!=='C'};
+}
+// Last 3 relevant segments: record highs (or lows) since the trend began; the correction is the lowest point between them
+function relevant(p,cp){
+  const sg=cp.t==='U'?1:-1,q=p.map(v=>sg*v),H=sg>0?cp.hiI:cp.loI,rec=[];let m=-Infinity;
+  for(let i=cp.Z+1;i<=H;i++)if(q[i]>q[i-1]&&q[i]>m){rec.push(i);m=q[i]}
+  const lw=(a,b)=>{let k=a;for(let i=a;i<=b;i++)if(q[i]<q[k])k=i;return k};
+  const n=rec.length,h3=rec[n-1],h1=rec[n-2],h0=rec[n-3];
+  return[lw(h0===undefined?cp.Z:h0,h1),h1,lw(h1,h3),h3];
+}
+// Chart builder: 5 sections following the notes' rules; the engine verifies every section
+function build(fw){
+  const t=['E'];
+  for(let i=1;i<5;i++){const pv=t[i-1],r=Math.random();
+    t.push((fw&&i==1)?'W':pv==='X'?(r<.3?'N':r<.6?'T':(r<.75&&i<4)?'K':(i==4&&r>.85)?'F':'T'):pv==='K'?'T':('ECNTW'.includes(pv)&&Math.random()<.25)?'W':['C','C','I','X','X'][R(0,4)])}
+  let s=Math.random()<.5?1:-1,p=[R(30,70)],ext,ctl,extI,low=null,B,old,secs=[];
+  const sl=(a,b)=>s*(a-b)<0?a:b;
+  const three=(c,d,lr,hr)=>{const Bm=d>0?hr:-lr,v0=d*c;if(Bm-7<v0+8)return null;
+    const v1=R(v0+8,Bm-7),v2=R(v0+4,v1-4),v3=R(v1+4,Bm-3);return[v1,v2,v3].map(v=>d*v)};
+  for(const k of t){
+    let lab;
+    if(k==='E'){const a=R(16,26),b=R(6,a-6),c=R(8,20),p1=p[0]+s*a;p.push(p1,p1-s*b,p1+s*c);ext=p[3];ctl=p[2];extI=3;lab=NAME[s]}
+    else if(k==='C'){const r=s*(ext-ctl);if(r<10)return null;const b=R(6,r-4),p1=ext-s*b;p.push(p1,ext+s*R(8,20));ctl=low===null?p1:sl(low,p1);ext=p[p.length-1];extI=p.length-1;low=null;lab=NAME[s]+' Cont.'}
+    else if(k==='I'){const r=s*(ext-ctl);if(r<14)return null;const b=R(9,r-4),p1=ext-s*b;p.push(p1,p1+s*R(5,b-4));low=low===null?p1:sl(low,p1);lab='Pullback'}
+    else if(k==='X'){B=ctl-s*R(6,16);old=ext;p.push(B);lab='Break'}
+    else if(k==='W'){const r=-s,rng=s*(ext-ctl),e0=p[p.length-1];if(rng<20)return null;
+      const ub=r*ctl-4,v0=r*e0,v1=R(v0+8,ub-4),v2=R(v0+4,v1-4),v3=R(v1+4,ub),v4=R(v2+3,v3-4),v5=r*ctl+R(6,14);
+      p.push(...[v1,v2,v3,v4,v5].map(v=>r*v));s=r;ext=p[p.length-1];ctl=p[p.length-2];extI=p.length-1;low=null;lab=NAME[s]}
+    else if(k==='K'){const g=s*(old-B);if(g<10)return null;const a=R(8,g+10),b=R(4,a-4),q1=B+s*a;p.push(q1,q1-s*b);lab='Range'}
+    else if(k==='T'){const seg=p.slice(extI),q=three(p[p.length-1],s,Math.min(...seg),Math.max(...seg));if(!q)return null;p.push(...q);ext=q[2];ctl=q[1];extI=p.length-1;low=null;lab='New '+NAME[s]}
+    else{const g=s*(old-B);if(g<10)return null;const a=R(6,g-4);p.push(B+s*a);
+      if(k==='N'){p.push(B-s*R(5,12));s=-s;ext=p[p.length-1];ctl=p[p.length-2];extI=p.length-1;low=null;lab=NAME[s]}else lab='Bounce'}
+    secs.push({k,lab,end:p.length-1,tr:s});
+  }
+  const sp=[...p].sort((x,y)=>x-y);for(let m=0;m<sp.length-1;m++)if(sp[m+1]-sp[m]<2)return null;
+  const a=analyse(p),st=a.out;
+  for(const x of secs){const e=st[x.end],want=('XFK'.includes(x.k))?'C':(x.tr>0?'U':'D');if(e!==want)return null}
+  const f=st[st.length-1];
+  return{p,secs,cp:a.cp,cur:a.cur,hard:secs.some(x=>x.k==='T'||x.k==='W'),rel:a.cur?relevant(p,a.cp):null,ans:f==='U'?'Uptrend':f==='D'?'Downtrend':'Consolidation'};
+}
+function quiz(){
+  let nu,nd,nc;do{nu=R(2,5);nd=R(2,5);nc=10-nu-nd}while(nc<1||nc>3);
+  const want=[...Array(nu).fill('Uptrend'),...Array(nd).fill('Downtrend'),...Array(nc).fill('Consolidation')].sort(()=>Math.random()-.5);
+  const ix=want.map((_,i)=>i).sort(()=>Math.random()-.5),f=ix.find(k=>want[k]!=='Consolidation'),hs=[f,...ix.filter(k=>k!==f).slice(0,R(1,2))];
+  return want.map((w,i)=>{const need=hs.includes(i);let c,g=0;do{c=build(i===hs[0]);g++}while((!c||c.ans!==w||(need&&!(i===hs[0]?c.secs.some(x=>x.k==='W'):c.hard)))&&g<30000);while(!c||c.ans!==w)c=build();return c});
+}
+function why(c){
+  const x=c.secs[c.secs.length-1],tn=NAME[x.tr].toLowerCase(),hl=x.tr>0?'a higher high and higher low':'a lower high and lower low';
+  return {E:`Three directional segments with ${x.tr>0?'higher highs and higher lows':'lower highs and lower lows'} form a ${tn}.`,
+   C:`The last segment closed beyond the control point in the trend's direction, so the ${tn} continues.`,
+   I:`The last pullback stayed inside the control points, so the ${tn} is unchanged.`,
+   X:`The last segment closed beyond the control point against the trend, breaking it. No new trend has formed yet, so the market is in consolidation.`,
+   N:`After the break, the market formed ${hl}, completing three directional segments: a new ${tn}.`,
+   T:`After the break, the market formed ${hl} inside the range of the break and consolidation, completing three directional segments: a new ${tn}.`,
+   W:`Measured from the last control point, the market had already formed ${hl} while still inside the old control points. Closing beyond them broke the old trend and confirmed the new ${tn}.`,
+   F:`After the break there is only a single counter-segment. Three directional segments haven't formed yet, so the market is still in consolidation.`}[x.k];
+}
+//UI
+let Q=quiz(),i=0,score=0,log=[];
+const $=document.getElementById('app');
+function chart(c,reveal){
+  const W=700,H=338,n=c.p.length,mn=Math.min(...c.p),mx=Math.max(...c.p);
+  const X=k=>40+k*(W-80)/(n-1),Y=v=>30+(mx-v)*250/(mx-mn);
+  let g=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Line chart"><polyline fill="none" stroke="var(--ink)" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" points="${c.p.map((v,k)=>X(k)+','+Y(v)).join(' ')}"/>`;
+  if(reveal&&c.rel){const col=c.cp.t==='U'?'#22c55e':'#ef4444';g+=`<polyline fill="none" stroke="${col}" stroke-width="6" stroke-linejoin="round" stroke-linecap="round" points="${c.rel.map(k=>X(k)+','+Y(c.p[k])).join(' ')}"/><line x1="40" x2="72" y1="316" y2="316" stroke="${col}" stroke-width="6" stroke-linecap="round"/><text x="80" y="322" font-size="15" font-weight="700" fill="${col}">Last 3 relevant segments</text>`}
+  if(reveal){const cp=c.cp,nm=cp.t==='U'?['Higher High','Higher Low']:['Lower High','Lower Low'],col=c.cur?'#f59e0b':'#94a3b8',tc=c.cur?'var(--acc)':'var(--muted)';
+    [[cp.hi,cp.hiI,nm[0],-9],[cp.lo,cp.loI,nm[1],21]].forEach(([v,k,t,dy])=>{const x=X(k),y=Y(v);
+      g+=`<line x1="${x}" x2="${W-12}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2.5" stroke-dasharray="8 6"/><circle cx="${x}" cy="${y}" r="6" fill="${col}" stroke="var(--card)" stroke-width="2"/><text x="${W-14}" y="${y+dy}" text-anchor="end" font-size="15" font-weight="700" fill="${tc}" stroke="var(--card)" stroke-width="4" style="paint-order:stroke">${c.cur?'':'Previous '}Control Point (${t})</text>`})}
+  return g+'</svg>';
+}
+function show(){
+  if(i>=10){
+    $.innerHTML=`<div class="card" style="text-align:center"><div class="sub">Quiz complete</div><div class="big">${score} / 10</div><p>${score>=9?'Excellent trend reading.':score>=7?'Solid. Review the questions you missed below.':'Keep practising: revisit the control point and break rules.'}</p></div>`+
+    log.map((l,k)=>`<div class="rev"><span>Q${k+1}: ${l.ans}</span><span>${l.ok?'✓':'✗ you chose '+l.pick}</span></div>`).join('')+`<button class="next" id="again">Try a new set</button>`;
+    document.getElementById('again').onclick=()=>{Q=quiz();i=0;score=0;log=[];show()};return;
+  }
+  const c=Q[i];
+  $.innerHTML=`<div class="top"><span>Question ${i+1} of 10</span><span>Score ${score}</span></div><div class="bar"><i style="width:${i*10}%"></i></div>
+  <div class="card" id="ch">${chart(c,false)}</div><div class="q">What state is the market in at the end of this chart?</div>
+  <div class="opts">${['Uptrend','Downtrend','Consolidation'].map(o=>`<button data-o="${o}">${o}</button>`).join('')}</div><div id="fb"></div>`;
+  $.querySelectorAll('.opts button').forEach(b=>b.onclick=()=>answer(b.dataset.o));
+}
+function answer(o){
+  const c=Q[i],ok=o===c.ans;if(ok)score++;log.push({ans:c.ans,pick:o,ok});
+  $.querySelectorAll('.opts button').forEach(b=>{b.disabled=true;if(b.dataset.o===c.ans)b.classList.add('ok');else if(b.dataset.o===o)b.classList.add('bad')});
+  document.getElementById('ch').innerHTML=chart(c,true);
+  document.getElementById('fb').innerHTML=`<div class="fb"><b>${ok?'Correct!':'Not quite.'}</b> The answer is <b>${c.ans}</b>. ${why(c)} ${c.cur?'Orange lines mark the current control points; the coloured line marks the last 3 relevant segments.':'Grey lines mark the last control points of the broken trend.'}</div><button class="next" id="nx">${i<9?'Next question':'See results'}</button>`;
+  document.getElementById('nx').onclick=()=>{i++;show()};
+}
+show();
+</script></body></html>
