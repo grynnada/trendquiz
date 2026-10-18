@@ -24,7 +24,7 @@ button:hover:not(:disabled){border-color:var(--blue)}button:disabled{cursor:defa
 .next{margin-top:12px;background:var(--blue);border-color:var(--blue);color:#fff;width:100%}
 details{margin:0 0 14px;font-size:14px;color:var(--muted)}summary{cursor:pointer}
 .big{font-size:48px;font-weight:800;margin:10px 0}.rev{margin:8px 0;padding:8px 10px;border-radius:8px;background:var(--card);font-size:14px;display:flex;justify-content:space-between;gap:8px}
-.menu{display:grid;gap:12px}.mc{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:4px;padding:16px;font-size:17px}.sub:empty{display:none}.cap{margin:10px 2px;font-size:15px}.cnt{font-size:13px;color:var(--muted);margin:0 4px 6px}button:disabled{opacity:.45}
+.menu{display:grid;gap:12px}.mc{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:4px;padding:16px;font-size:17px}.sub:empty{display:none}.cap{margin:10px 2px;font-size:15px}.capg{display:grid}.capg .cap{grid-area:1/1;visibility:hidden}.capg .cap.on{visibility:visible}.cnt{font-size:13px;color:var(--muted);margin:0 4px 6px}button:disabled{opacity:.45}
 .link{border:none;background:none;color:var(--blue);padding:0;font-weight:600;font-size:14px}.row{display:flex;gap:10px;margin-top:12px}.row .next{margin-top:0;flex:1}.next.alt{background:var(--card);color:var(--ink);border-color:var(--line)}
 .tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 0}.tb{padding:6px 10px;font-size:14px;border-radius:8px}.tb.on{border-color:var(--blue);background:var(--okbg)}select.tb{background:var(--card);color:var(--ink);border:2px solid var(--line);font-weight:600}.sw{width:26px;height:26px;padding:0;border-radius:50%;border:2px solid var(--line)}.sw.on{border-color:var(--ink);box-shadow:inset 0 0 0 2px var(--bg)}.sp{flex:1}#cv{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;border-radius:14px}#chw{overflow:hidden}.tools{position:relative;z-index:2}
 .slw{margin:8px 13px 0}.slw input{-webkit-appearance:none;appearance:none;background:transparent;height:30px;margin-top:0;margin-bottom:0;display:block;touch-action:pan-y}.slw input::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--line)}.slw input::-moz-range-track{height:6px;border-radius:3px;background:var(--line)}.slw input::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;margin-top:-11px;border-radius:50%;background:var(--blue);border:3px solid var(--bg);box-shadow:0 0 0 1px var(--blue)}.slw input::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--blue);border:3px solid var(--bg);box-shadow:0 0 0 1px var(--blue)}.slt{font-size:12px;color:var(--muted);text-align:right;margin-top:2px}
@@ -39,8 +39,8 @@ details{margin:0 0 14px;font-size:14px;color:var(--muted)}summary{cursor:pointer
 const R=(a,b)=>Math.round(a+Math.random()*(b-a)),NAME={1:'Uptrend','-1':'Downtrend'};
 // Rules engine: market state after each turning point + control points (current or last)
 function analyse(p){
-  let st='C',anchor=0,brk=-1,Z=0,hi,lo,hiI,loI,mn=Infinity,mnI,mx=-Infinity,mxI,out=['C'],cp=null,ev=[];
-  const snap=()=>{cp={t:st,hi,hiI,lo,loI,Z,A:anchor}};
+  let st='C',anchor=0,brk=-1,Z=0,CZ=0,hi,lo,hiI,loI,mn=Infinity,mnI,mx=-Infinity,mxI,out=['C'],cp=null,ev=[];
+  const snap=()=>{cp={t:st,hi,hiI,lo,loI,Z,A:anchor,CZ}};
   // From a start point: the first extreme after it, the pullback from that extreme, then a push beyond the first extreme forms a trend.
   // Small moves in between are noise, so control points effectively move along to each new extreme until a trend forms.
   const scan=(s,upTo,dir,minJ)=>{const sg=dir==='U'?1:-1;let S=Infinity,SI=-1,H=-Infinity,L1=Infinity,L1I=-1;
@@ -50,7 +50,10 @@ function analyse(p){
       else if(H>-Infinity&&v<L1){L1=v;L1I=k}}
     return null};
   const find=(A,i,dirs,minJ)=>{let b=null;for(const d of dirs)for(let s=A;s<=i-3;s++){const f=scan(s,i,d,minJ);if(f&&(!b||f.j<b.j||(f.j===b.j&&f.s<b.s)))b=f}return b};
-  const put=f=>{Z=f.Z;ev.push({k:'t',t:f.t,j:f.j,Z:f.Z});
+  // where the relevant segments start: the earliest point (from the last control point on) that makes the trend's first extreme a record. Fixed when the trend forms.
+  const startFor=(t,H,A,z0)=>{const sg=t==='U'?1:-1,q=p.map(v=>sg*v),recs=z=>{const r=[];let m=-Infinity;for(let i=z+1;i<=H;i++)if(q[i]>q[i-1]&&q[i]>m){r.push(i);m=q[i]}return r};
+    for(let s=A;s<=H-3;s++){const r=recs(s);if(r.length>=2&&r[r.length-1]===H)return s}return z0};
+  const put=f=>{Z=f.Z;CZ=startFor(f.t,f.j,anchor,f.Z);ev.push({k:'t',t:f.t,j:f.j,Z:f.Z});
     if(f.t==='U'){st='U';hi=p[f.j];hiI=f.j;lo=p[f.ci];loI=f.ci;mn=Infinity}else{st='D';lo=p[f.j];loI=f.j;hi=p[f.ci];hiI=f.ci;mx=-Infinity}snap()};
   for(let i=1;i<p.length;i++){
     const up=p[i]>p[i-1],v=p[i],was=st;
@@ -87,12 +90,12 @@ function build(fw,ns=5,plan=[]){
     if(k==='E'){const a=R(16,26)+xg,b=R(6,a-6),c=R(8,20),p1=p[0]+s*a;p.push(p1,p1-s*b,p1+s*c);ext=p[3];ctl=p[2];extI=3;lab=NAME[s]}
     else if(k==='C'){const r=s*(ext-ctl);if(r<10)return null;const b=R(6,r-4),p1=ext-s*b;p.push(p1,ext+s*(R(8,20)+xg));ctl=low===null?p1:sl(low,p1);ext=p[p.length-1];extI=p.length-1;low=null;lab=NAME[s]+' Cont.'}
     else if(k==='I'){const r=s*(ext-ctl);if(r<14)return null;const b=R(9,r-4),p1=ext-s*b;p.push(p1,p1+s*R(5,b-4));low=low===null?p1:sl(low,p1);lab='Pullback'}
-    else if(k==='X'){B=ctl-s*(R(6,16)+xg);old=ext;p.push(B);lab='Break'}
+    else if(k==='X'){B=ctl-s*(R(8,16)+xg);old=ext;p.push(B);lab='Break'}
     else if(k==='W'){const r=-s,rng=s*(ext-ctl),e0=p[p.length-1];if(rng<20)return null;
-      const ub=r*ctl-4,v0=r*e0,v1=R(v0+8,ub-4),v2=R(v0+4,v1-4),v3=R(v1+4,ub),v4=R(v2+3,v3-4),v5=r*ctl+R(6,14);
+      const ub=r*ctl-4,v0=r*e0,v1=R(v0+8,ub-4),v2=R(v0+4,v1-4),v3=R(v1+4,ub),v4=R(v2+3,v3-4),v5=r*ctl+R(8,16);
       p.push(...[v1,v2,v3,v4,v5].map(v=>r*v));s=r;ext=p[p.length-1];ctl=p[p.length-2];extI=p.length-1;low=null;lab=NAME[s]}
     else if(k==='Y'){const r=-s,rng=s*(ext-ctl),e0=p[p.length-1];if(rng<22)return null;
-      const ub=r*ctl-4,v0=r*e0,vE=r*ctl+R(6,14);let vals,ctlV;
+      const ub=r*ctl-4,v0=r*e0,vE=r*ctl+R(8,16);let vals,ctlV;
       if(Math.random()<.5){ // first extreme, a pullback with small moves inside it, then a push beyond the first extreme that breaks the old trend
         const v1=R(v0+10,ub),d1=R(v0+4,v1-7);
         if(Math.random()<.5){vals=[v1,d1,vE];ctlV=d1}else{const u1=R(d1+3,v1-4),d2=R(v0+4,u1-3);vals=[v1,d1,u1,d2,vE];ctlV=Math.min(d1,d2)}
@@ -120,8 +123,8 @@ function chain(p,cp){
   const sg=cp.t==='U'?1:-1,q=p.map(v=>sg*v),H=sg>0?cp.hiI:cp.loI;
   const lw=(a,b)=>{let k=a;for(let i=a;i<=b;i++)if(q[i]<q[k])k=i;return k};
   const recs=z=>{const r=[];let m=-Infinity;for(let i=z+1;i<=H;i++)if(q[i]>q[i-1]&&q[i]>m){r.push(i);m=q[i]}return r};
-  let z=cp.A??cp.Z,rec=recs(z);
-  for(let s=z;s<=H-3;s++){const r=recs(s);if(r.length>=2&&r[r.length-1]===H){z=s;rec=r;break}}
+  let z=cp.CZ??cp.A??cp.Z,rec=recs(z);
+  if(!(rec.length>=2&&rec[rec.length-1]===H))for(let s=cp.A??cp.Z;s<=H-3;s++){const r=recs(s);if(r.length>=2&&r[r.length-1]===H){z=s;rec=r;break}}
   const o=[lw(z,rec[0])];rec.forEach((r,k)=>{o.push(r);if(k<rec.length-1)o.push(lw(r,rec[k+1]))});return o;
 }
 const relevant=(p,cp)=>chain(p,cp).slice(-4);
@@ -135,10 +138,10 @@ function phases(c){
   return sl;
 }
 // Candlestick version: every line (point-to-point) becomes 1-3 candles whose bodies tile the move; gaps are read as same-direction candles
-const MB=4,MINB=2.4,rnd=(a,b)=>a+Math.random()*(b-a);
+const MB=4,MINB=2.4,MINBR=5,rnd=(a,b)=>a+Math.random()*(b-a);
 function capOf(c,N){const S=c.p.length-1;if(S>N)return 0;const G={};(c.gr||[]).forEach(x=>G[x.k]=x.g);let t=0;for(let k=1;k<=S;k++)t+=Math.max(1,Math.floor((Math.abs(c.p[k]-c.p[k-1])-(G[k]||0))/MB));return t}
 // Advanced mode: mostly small/medium gaps, occasional large or very large (RTH-style) ones, and a wide wick range
-function gapSize(){const r=Math.random();return r<.6?rnd(.5,2):r<.9?rnd(2,5):rnd(3,7)}
+function gapSize(){const r=Math.random();return r<.6?rnd(2.5,4):r<.9?rnd(4,8):rnd(5,9)}
 function wickLen(){const r=Math.random();return r<.2?rnd(0,.8):r<.62?rnd(1,3):r<.88?rnd(3,8):r<.97?rnd(8,16):rnd(16,28)}
 // A gap is read as a candle that opens at the previous close and closes at the next open; this returns the real price path
 function effective(cd){
@@ -147,7 +150,7 @@ function effective(cd){
   return{p:[cd[0].o,...runs.map(r=>r.t)],ptc:[0,...runs.map(r=>r.ci)]};
 }
 function convert(c,N,adv,cx){
-  const p=c.p,S=p.length-1,cap=[],cnt=[],cd=[],last=[0],gsz=()=>adv?gapSize(false):rnd(1,1.8),gp=adv?.3:.22,GR={};
+  const p=c.p,S=p.length-1,cap=[],cnt=[],cd=[],last=[0],bigB=new Set(),GMIN=adv?2.5:3,gsz=()=>adv?gapSize():rnd(3,5),gp=adv?.3:.22,GR={};
   (c.gr||[]).forEach(x=>GR[x.k]=x.g);
   for(let k=1;k<=S;k++){cap[k]=Math.max(1,Math.floor((Math.abs(p[k]-p[k-1])-(GR[k]||0))/MB));cnt[k]=1}
   for(let rem=N-S;rem>0;rem--){const ks=[];for(let k=1;k<=S;k++)for(let r=cnt[k];r<cap[k];r++)ks.push(k);if(!ks.length)break;cnt[ks[Math.floor(Math.random()*ks.length)]]++}
@@ -160,21 +163,27 @@ function convert(c,N,adv,cx){
       const sg=[];for(let j=0;j<n-1;j++){const g=j===inn?G:(Math.random()<gp?gsz():0);sg.push(g&&neg&&j!==inn&&Math.random()<.4?-g:g)}
       let sp=0,sn=0;sg.forEach((s,j)=>{if(j!==inn){s>0?sp+=s:sn+=s}});
       const room=mv-n*MINB-sn-st-en-(inn>=0?G:0);if(sp>room){const f=Math.max(0,room)/sp;for(let j=0;j<sg.length;j++)if(sg[j]>0&&j!==inn)sg[j]*=f}
+      for(let j=0;j<sg.length;j++)if(sg[j]>0&&j!==inn&&sg[j]<GMIN)sg[j]=0;
       const w=Array.from({length:n},()=>rnd(.6,1.4)),ws=w.reduce((x,y)=>x+y,0),T=mv-sg.reduce((x,y)=>x+y,0)-st-en;
       let pos=a+d*st,ok=true;tmp=[];
       for(let j=0;j<n;j++){const bd=MINB+(T-n*MINB)*w[j]/ws,cl=pos+d*bd;tmp.push({o:pos,c:cl,d});
         if(j<n-1){if(d*(b-cl)<.4)ok=false;pos=cl+d*(sg[j]||0);if(d*(pos-a)<.6)ok=false}}
       if(ok||!neg)break;
     }
+    if(en)bigB.add(k);if(st)bigB.add(k-1);
     tmp[tmp.length-1].c=b-d*en;cd.push(...tmp);last[k]=cd.length-1;
   }
   // gaps at a change of direction: with the candle before it, or with the candle after it
-  for(let k=1;k<S;k++){const i=last[k];if(Math.random()<gp){const g0=gsz();
-    if(Math.random()<.5){const g=Math.min(g0,Math.abs(cd[i].c-cd[i].o)-MINB);if(g>=.8)cd[i].c-=cd[i].d*g}
-    else{const q=cd[i+1],g=Math.min(g0,Math.abs(q.c-q.o)-MINB);if(g>=.8)q.o+=q.d*g}}}
+  for(let k=1;k<S;k++){const i=last[k];if(!bigB.has(k)&&Math.random()<gp){const g0=gsz();
+    if(Math.random()<.5){const g=Math.min(g0,Math.abs(cd[i].c-cd[i].o)-MINB);if(g>=GMIN)cd[i].c-=cd[i].d*g}
+    else{const q=cd[i+1],g=Math.min(g0,Math.abs(q.c-q.o)-MINB);if(g>=GMIN)q.o+=q.d*g}}}
   cd.forEach(k=>{k.hi=Math.max(k.o,k.c)+(adv?wickLen():Math.random()<.2?0:1+Math.random()*4);k.lo=Math.min(k.o,k.c)-(adv?wickLen():Math.random()<.2?0:1+Math.random()*4)});
   return{cd,e:effective(cd)};
 }
+// In candle charts the first candle that closes beyond a control point to break a trend must clear it by a visible distance
+const brkOK=(cd,e,a)=>{for(const ev of a.ev){if(ev.k!=='b')continue;const L=ev.cp.t==='U'?ev.cp.lo:ev.cp.hi;let ok=false;
+  for(let m=e.ptc[ev.i-1];m<=e.ptc[ev.i];m++){const c=cd[m].c;if(ev.cp.t==='U'?c<L:c>L){ok=Math.abs(c-L)>=MINBR;break}}
+  if(!ok)return false}return true};
 // A gap against the move adds real turning points, so the chart is re-analysed and only kept if the story is unchanged
 function toCandles(c,N,adv){
   const a0=analyse(c.p),k0=phases({p:c.p,ev:a0.ev,cp:a0.cp}).map(s=>s.k).join('');
@@ -183,6 +192,7 @@ function toCandles(c,N,adv){
     let a2=a0;
     if(!same){a2=analyse(e.p);const f=a2.out[a2.out.length-1],ans=f==='U'?'Uptrend':f==='D'?'Downtrend':'Consolidation';
       if(ans!==c.ans||a2.cp.t!==c.cp.t||Math.abs(a2.cp.hi-c.cp.hi)>1e-6||Math.abs(a2.cp.lo-c.cp.lo)>1e-6||phases({p:e.p,ev:a2.ev,cp:a2.cp}).map(s=>s.k).join('')!==k0)continue}
+    if(!brkOK(r.cd,e,a2))continue;
     c.cd=r.cd;c.ptc=e.ptc;
     if(!same){c.p=e.p;c.cp=a2.cp;c.cur=a2.cur;c.ev=a2.ev;c.rel=a2.cur?relevant(e.p,a2.cp):null}
     return c;
@@ -226,7 +236,7 @@ function menu(){
 }
 function start(m){mode=m;Q=quiz(m);i=0;score=0;log=[];TT.textContent='Trend Quiz: '+MODES[m];SB.textContent='';show()}
 function geom(c){
-  const W=700,H=470,L=c.cd,n=c.p.length,mn=L?Math.min(...L.map(k=>k.lo)):Math.min(...c.p),mx=L?Math.max(...L.map(k=>k.hi)):Math.max(...c.p);
+  const W=700,H=470,L=c.cd,P=c.gp||c.p,n=P.length,mn=L?Math.min(...L.map(k=>k.lo)):Math.min(...P),mx=L?Math.max(...L.map(k=>k.hi)):Math.max(...P);
   const N=L?L.length:n,x0=L?48:40,pt=(W-2*x0)/Math.max(N-1,1);
   return{W,H,L,pt,Y:v=>30+(mx-v)*(H-100)/(mx-mn),X:k=>x0+(L?c.ptc[k]:k)*pt,x0};
 }
@@ -248,7 +258,7 @@ function ctl(c,G,cp,cur){
     g+=`<line x1="${x}" x2="${G.W-12}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2.5" stroke-dasharray="8 6"/><circle cx="${x}" cy="${y}" r="6" fill="${col}" stroke="var(--card)" stroke-width="2"/><text x="${G.W-14}" y="${y+dy}" text-anchor="end" font-size="15" font-weight="700" fill="${tc}" stroke="var(--card)" stroke-width="4" style="paint-order:stroke">${cur?'':'Previous '}Control Point (${t})</text>`});
   return g;
 }
-const legend=(G,col,t)=>`<line x1="40" x2="72" y1="${G.H-22}" y2="${G.H-22}" stroke="${col}" stroke-width="6" stroke-linecap="round"/><text x="80" y="${G.H-16}" font-size="15" font-weight="700" fill="${col}">${t}</text>`;
+const legend=(G,col,t,row=0)=>`<line x1="40" x2="72" y1="${G.H-22-row*24}" y2="${G.H-22-row*24}" stroke="${col}" stroke-width="6" stroke-linecap="round"/><text x="80" y="${G.H-16-row*24}" font-size="15" font-weight="700" fill="${col}">${t}</text>`;
 const wrap=(G,c,g)=>`<svg viewBox="0 0 ${G.W} ${G.H}" role="img" aria-label="${G.L?'Candlestick':'Line'} chart">${g}</svg>`;
 function chart(c,reveal,vis=Infinity){
   const G=geom(c),full=vis>=(c.cd?c.cd.length:c.p.length);let g=base(c,G,1,vis);
@@ -257,24 +267,25 @@ function chart(c,reveal,vis=Infinity){
   return wrap(G,c,g);
 }
 // Breakdown slideshow: one picture per trend, per break, and per run of movements that do not form a trend
-const TC=t=>t==='U'?'#22c55e':'#ef4444',TN=t=>t==='U'?'uptrend':'downtrend';
+const TC=t=>t==='U'?'#22c55e':'#ef4444',TN=t=>t==='U'?'uptrend':'downtrend',CTLN=t=>t==='U'?'Higher Low':'Lower High';
 function slide(c,s){
   const G=geom(c);let g=base(c,G,.28);
   if(s.k==='T'){const ch=chain(c.p,s.cp);g+=path(c,G,ch,TC(s.cp.t),6)+ctl(c,G,s.cp,true)+legend(G,TC(s.cp.t),'Relevant segments of the '+TN(s.cp.t))}
-  else if(s.k==='B'){g+=path(c,G,chain(c.p,s.cp),TC(s.cp.t),4)+ctl(c,G,s.cp,true)+path(c,G,[s.i-1,s.i],'#8b5cf6',8)+legend(G,'#8b5cf6','Break: the closing segment')}
+  else if(s.k==='B'){g+=path(c,G,chain(c.p,s.cp),TC(s.cp.t),4)+ctl(c,G,s.cp,true)+path(c,G,[s.i-1,s.i],'#8b5cf6',8)+legend(G,'#8b5cf6','Break: closed '+(s.cp.t==='U'?'below':'above')+' the '+CTLN(s.cp.t))}
   else{const idx=[];for(let k=s.a;k<=s.b;k++)idx.push(k);g+=path(c,G,idx,'#1d9bf0',6)+ctl(c,G,s.cp,false)+legend(G,'#1d9bf0','Movements that do not form a trend')}
   return wrap(G,c,g);
 }
 function caption(c,s,last){
   const nm=NM(s.cp.t);let t;
   if(s.k==='T')t=`${TN(s.cp.t)[0].toUpperCase()+TN(s.cp.t).slice(1)}: only the relevant segments are shown (${chain(c.p,s.cp).length-1} in total). Control points sit at the ${nm[0]} and ${nm[1]}.`;
-  else if(s.k==='B')t=`Break: the segment closed ${s.cp.t==='U'?'below the Higher Low':'above the Lower High'}, against the ${TN(s.cp.t)}, so the ${TN(s.cp.t)} is broken.`;
+  else if(s.k==='B')t=`Break: price closed ${s.cp.t==='U'?'below the Higher Low':'above the Lower High'}, the control point protecting the ${TN(s.cp.t)}. Closing beyond a control point against the trend breaks it, so the ${TN(s.cp.t)} is broken.`;
   else t=`These movements after the break do not create a new trend (three directional segments of ${s.cp.t==='U'?'lower highs and lower lows, or higher highs and higher lows':'higher highs and higher lows, or lower highs and lower lows'} have not formed), so the market is in consolidation.`;
   return t+(last?` Result: ${c.ans}.`:'');
 }
 function bd(){
-  const c=Q[i],sl=c.sl||(c.sl=phases(c)),s=sl[step];
-  document.getElementById('bdv').innerHTML=`<div class="card"><div class="cnt">Breakdown · step ${step+1} of ${sl.length}</div>${slide(c,s)}</div><p class="cap">${caption(c,s,step===sl.length-1)}</p><div class="row"><button class="next alt" id="bp" ${step?'':'disabled'}>‹ Previous</button><button class="next alt" id="bn" ${step<sl.length-1?'':'disabled'}>Next ›</button></div>`;
+  const c=Q[i],sl=c.sl||(c.sl=phases(c));
+  // every caption sits in the same grid cell, so the space always fits the longest one and the buttons never move
+  document.getElementById('bdv').innerHTML=`<div class="card"><div class="cnt">Breakdown · step ${step+1} of ${sl.length}</div>${slide(c,sl[step])}</div><div class="capg">${sl.map((x,j)=>`<p class="cap${j===step?' on':''}">${caption(c,x,j===sl.length-1)}</p>`).join('')}</div><div class="row"><button class="next alt" id="bp" ${step?'':'disabled'}>‹ Previous</button><button class="next alt" id="bn" ${step<sl.length-1?'':'disabled'}>Next ›</button></div>`;
   document.getElementById('bp').onclick=()=>{step--;bd()};document.getElementById('bn').onclick=()=>{step++;bd()};
 }
 // Draw / erase tool drawn on a canvas over the chart, with undo and redo
@@ -313,8 +324,9 @@ function drawInit(){
 // Replay slider: hides everything to the right of it and snaps to each point (line charts) or each gap between candles
 let REV=false,VP=Infinity;
 const SG=c=>{const W=700,L=c.cd,N=L?L.length:c.p.length,x0=L?48:40,pt=(W-2*x0)/Math.max(N-1,1);return{W,min:L?1:2,max:N,x:v=>L?x0+(v-.5)*pt:x0+(v-1)*pt,unit:L?'candles':'points'}};
-const sliderHtml=c=>{const g=SG(c),l=g.x(g.min)/g.W*100,r=(g.W-g.x(g.max))/g.W*100;
-  return `<div class="slw"><input type="range" id="sl" min="${g.min}" max="${g.max}" step="1" value="${g.max}" aria-label="Show the chart up to this position" style="width:calc(${100-l-r}% + 28px);margin-left:calc(${l}% - 14px)"><div class="slt" id="slt"></div></div>`};
+const sliderHtml=(c,id='sl',val,tid='slt')=>{const g=SG(c),l=g.x(g.min)/g.W*100,r=(g.W-g.x(g.max))/g.W*100;
+  return `<div class="slw"><input type="range" id="${id}" min="${g.min}" max="${g.max}" step="1" value="${val??g.max}" aria-label="Show the chart up to this position" style="width:calc(${100-l-r}% + 28px);margin-left:calc(${l}% - 14px)"><div class="slt" id="${tid}"></div></div>`};
+function sliderReset(c){const g=SG(c),s=document.getElementById('sl');s.value=g.max;VP=g.max;document.getElementById('slt').textContent=`Showing ${g.max} of ${g.max} ${g.unit}`}
 function sliderInit(c){
   const g=SG(c),s=document.getElementById('sl'),t=document.getElementById('slt');REV=false;VP=g.max;
   t.textContent=`Showing ${g.max} of ${g.max} ${g.unit}`;
@@ -337,7 +349,7 @@ function show(){
 function answer(o){
   const c=Q[i],ok=o===c.ans;if(ok)score++;log.push({ans:c.ans,pick:o,ok});step=0;
   $.querySelectorAll('.opts button').forEach(b=>{b.disabled=true;if(b.dataset.o===c.ans)b.classList.add('ok');else if(b.dataset.o===o)b.classList.add('bad')});
-  REV=true;document.getElementById('ch').innerHTML=chart(c,true,VP);
+  sliderReset(c);REV=true;document.getElementById('ch').innerHTML=chart(c,true,VP);
   document.getElementById('fb').innerHTML=`<div class="fb"><b>${ok?'Correct!':'Not quite.'}</b> The answer is <b>${c.ans}</b>. ${why(c)} ${c.cur?'Orange lines mark the current control points; the coloured line marks the last 3 relevant segments.':'Grey lines mark the last control points of the broken trend.'}</div><div class="row"><button class="next alt" id="bdb">Breakdown</button><button class="next" id="nx">${i<9?'Next question':'See results'}</button></div>`;
   document.getElementById('bdb').onclick=()=>{const v=document.getElementById('bdv');if(v.innerHTML){v.innerHTML=''}else{step=0;bd();v.scrollIntoView({behavior:'smooth',block:'nearest'})}};
   document.getElementById('nx').onclick=()=>{i++;show()};
