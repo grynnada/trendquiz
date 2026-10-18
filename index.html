@@ -26,6 +26,7 @@ details{margin:0 0 14px;font-size:14px;color:var(--muted)}summary{cursor:pointer
 .big{font-size:48px;font-weight:800;margin:10px 0}.rev{margin:8px 0;padding:8px 10px;border-radius:8px;background:var(--card);font-size:14px;display:flex;justify-content:space-between;gap:8px}
 .menu{display:grid;gap:12px}.mc{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:4px;padding:16px;font-size:17px}.sub:empty{display:none}.cap{margin:10px 2px;font-size:15px}.cnt{font-size:13px;color:var(--muted);margin:0 4px 6px}button:disabled{opacity:.45}
 .link{border:none;background:none;color:var(--blue);padding:0;font-weight:600;font-size:14px}.row{display:flex;gap:10px;margin-top:12px}.row .next{margin-top:0;flex:1}.next.alt{background:var(--card);color:var(--ink);border-color:var(--line)}
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 0}.tb{padding:6px 10px;font-size:14px;border-radius:8px}.tb.on{border-color:var(--blue);background:var(--okbg)}select.tb{background:var(--card);color:var(--ink);border:2px solid var(--line);font-weight:600}.sw{width:26px;height:26px;padding:0;border-radius:50%;border:2px solid var(--line)}.sw.on{border-color:var(--ink);box-shadow:inset 0 0 0 2px var(--bg)}.sp{flex:1}#cv{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;border-radius:14px}#chw{overflow:hidden}.tools{position:relative;z-index:2}
 @media(max-width:480px){.opts{grid-template-columns:1fr}}
 </style></head><body><main>
 <h1 id="ttl">Trend Quiz</h1>
@@ -37,111 +38,169 @@ details{margin:0 0 14px;font-size:14px;color:var(--muted)}summary{cursor:pointer
 const R=(a,b)=>Math.round(a+Math.random()*(b-a)),NAME={1:'Uptrend','-1':'Downtrend'};
 // Rules engine: market state after each turning point + control points (current or last)
 function analyse(p){
-  let st='C',anchor=0,Z=0,hi,lo,hiI,loI,mn=Infinity,mnI,mx=-Infinity,mxI,out=['C'],cp=null,ev=[];
-  const snap=()=>{cp={t:st,hi,hiI,lo,loI,Z}};
-  const pat=j=>{const [a,b,c,d]=p.slice(j-3,j+1);return a<b&&c>a&&d>b?'U':a>b&&c<a&&d<b?'D':null};
-  const put=(t,j)=>{const [a,b,c,d]=p.slice(j-3,j+1);Z=j-3;ev.push({k:'t',t,j});if(t==='U'){st='U';hi=d;hiI=j;lo=c;loI=j-1;mn=Infinity}else{st='D';lo=d;loI=j;hi=c;hiI=j-1;mx=-Infinity}snap()};
+  let st='C',anchor=0,brk=-1,Z=0,hi,lo,hiI,loI,mn=Infinity,mnI,mx=-Infinity,mxI,out=['C'],cp=null,ev=[];
+  const snap=()=>{cp={t:st,hi,hiI,lo,loI,Z,A:anchor}};
+  // From a start point: the first extreme after it, the pullback from that extreme, then a push beyond the first extreme forms a trend.
+  // Small moves in between are noise, so control points effectively move along to each new extreme until a trend forms.
+  const scan=(s,upTo,dir,minJ)=>{const sg=dir==='U'?1:-1;let S=Infinity,SI=-1,H=-Infinity,L1=Infinity,L1I=-1;
+    for(let k=s;k<=upTo;k++){const v=sg*p[k];
+      if(v<S){S=v;SI=k;H=-Infinity;L1=Infinity;L1I=-1}
+      else if(v>H){if(L1I>=0&&k>minJ)return{t:dir,j:k,Z:SI,ci:L1I,s};H=v;L1=Infinity;L1I=-1}
+      else if(H>-Infinity&&v<L1){L1=v;L1I=k}}
+    return null};
+  const find=(A,i,dirs,minJ)=>{let b=null;for(const d of dirs)for(let s=A;s<=i-3;s++){const f=scan(s,i,d,minJ);if(f&&(!b||f.j<b.j||(f.j===b.j&&f.s<b.s)))b=f}return b};
+  const put=f=>{Z=f.Z;ev.push({k:'t',t:f.t,j:f.j,Z:f.Z});
+    if(f.t==='U'){st='U';hi=p[f.j];hiI=f.j;lo=p[f.ci];loI=f.ci;mn=Infinity}else{st='D';lo=p[f.j];loI=f.j;hi=p[f.ci];hiI=f.ci;mx=-Infinity}snap()};
   for(let i=1;i<p.length;i++){
     const up=p[i]>p[i-1],v=p[i],was=st;
     if(st==='U'){
       if(up){if(v>hi){hi=v;hiI=i;lo=mn;loI=mnI;mn=Infinity;snap()}}
-      else if(v<lo){ev.push({k:'b',i,cp});st='C';anchor=hiI}else if(v<mn){mn=v;mnI=i}
+      else if(v<lo){ev.push({k:'b',i,cp});st='C';anchor=hiI;brk=i}else if(v<mn){mn=v;mnI=i}
     }else if(st==='D'){
       if(!up){if(v<lo){lo=v;loI=i;hi=mx;hiI=mxI;mx=-Infinity;snap()}}
-      else if(v>hi){ev.push({k:'b',i,cp});st='C';anchor=loI}else if(v>mx){mx=v;mxI=i}
+      else if(v>hi){ev.push({k:'b',i,cp});st='C';anchor=loI;brk=i}else if(v>mx){mx=v;mxI=i}
     }
-    if(st==='C'&&i-3>=anchor){
-      let t=pat(i),j=i;
-      if(!t&&was!=='C'){for(j=i-1;j>=anchor+3;j--)if(pat(j)===(was==='U'?'D':'U')){t=pat(j);break}}
-      if(t&&j<i){put(t,j);out.length=j;out.push(st);i=j;continue}
-      if(t)put(t,i);
-      
-      
+    if(st==='C'){
+      // at a break, a trend may already have formed from the last control point (against the old trend, inside its controls)
+      const f=was!=='C'?find(anchor,i,[was==='U'?'D':'U'],-1):find(anchor,i,['D','U'],brk);
+      if(f){put(f);if(f.j<i){out.length=f.j;out.push(st);i=f.j;continue}}
     }
     out.push(st);
   }
   return {out,cp,cur:st!=='C',ev};
 }
-// Last 3 relevant segments: record highs (or lows) since the trend began; the correction is the lowest point between them
-function relevant(p,cp){
-  const sg=cp.t==='U'?1:-1,q=p.map(v=>sg*v),H=sg>0?cp.hiI:cp.loI,rec=[];let m=-Infinity;
-  for(let i=cp.Z+1;i<=H;i++)if(q[i]>q[i-1]&&q[i]>m){rec.push(i);m=q[i]}
-  const lw=(a,b)=>{let k=a;for(let i=a;i<=b;i++)if(q[i]<q[k])k=i;return k};
-  const n=rec.length,h3=rec[n-1],h1=rec[n-2],h0=rec[n-3];
-  return[lw(h0===undefined?cp.Z:h0,h1),h1,lw(h1,h3),h3];
-}
 // Chart builder: 5 sections following the notes' rules; the engine verifies every section
-function build(fw){
+const HB=67; // typical chart height (body range) used to size big gaps
+function build(fw,ns=5,plan=[]){
   const t=['E'];
-  for(let i=1;i<5;i++){const pv=t[i-1],r=Math.random();
-    t.push((fw&&i==1)?'W':pv==='X'?(r<.3?'N':r<.6?'T':(r<.75&&i<4)?'K':(i==4&&r>.85)?'F':'T'):pv==='K'?'T':('ECNTW'.includes(pv)&&Math.random()<.25)?'W':['C','C','I','X','X'][R(0,4)])}
+  for(let i=1;i<ns;i++){const pv=t[i-1],r=Math.random();
+    t.push((fw&&i==1)?'W':pv==='X'?(r<.3?'N':r<.6?'T':(r<.75&&i<ns-1)?'K':(i==ns-1&&r>.7)?'F':'T'):pv==='K'?'T':('ECNTWY'.includes(pv)&&Math.random()<.25)?(Math.random()<.5?'W':'Y'):['C','C','I','X','X'][R(0,4)])}
+  const exs={},gr=[];
+  if(plan.length){const el=[];t.forEach((k,i)=>{if('ECXN'.includes(k))el.push(i)});if(el.length<plan.length)return null;el.sort(()=>Math.random()-.5);plan.forEach((q,j)=>{exs[el[j]]=q})}
   let s=Math.random()<.5?1:-1,p=[R(30,70)],ext,ctl,extI,low=null,B,old,secs=[];
   const sl=(a,b)=>s*(a-b)<0?a:b;
   const three=(c,d,lr,hr)=>{const Bm=d>0?hr:-lr,v0=d*c;if(Bm-7<v0+8)return null;
     const v1=R(v0+8,Bm-7),v2=R(v0+4,v1-4),v3=R(v1+4,Bm-3);return[v1,v2,v3].map(v=>d*v)};
-  for(const k of t){
-    let lab;
-    if(k==='E'){const a=R(16,26),b=R(6,a-6),c=R(8,20),p1=p[0]+s*a;p.push(p1,p1-s*b,p1+s*c);ext=p[3];ctl=p[2];extI=3;lab=NAME[s]}
-    else if(k==='C'){const r=s*(ext-ctl);if(r<10)return null;const b=R(6,r-4),p1=ext-s*b;p.push(p1,ext+s*R(8,20));ctl=low===null?p1:sl(low,p1);ext=p[p.length-1];extI=p.length-1;low=null;lab=NAME[s]+' Cont.'}
+  for(let si=0;si<t.length;si++){
+    const k=t[si],xg=exs[si]?exs[si].r*HB/(1-exs[si].r):0;let lab;
+    if(k==='E'){const a=R(16,26)+xg,b=R(6,a-6),c=R(8,20),p1=p[0]+s*a;p.push(p1,p1-s*b,p1+s*c);ext=p[3];ctl=p[2];extI=3;lab=NAME[s]}
+    else if(k==='C'){const r=s*(ext-ctl);if(r<10)return null;const b=R(6,r-4),p1=ext-s*b;p.push(p1,ext+s*(R(8,20)+xg));ctl=low===null?p1:sl(low,p1);ext=p[p.length-1];extI=p.length-1;low=null;lab=NAME[s]+' Cont.'}
     else if(k==='I'){const r=s*(ext-ctl);if(r<14)return null;const b=R(9,r-4),p1=ext-s*b;p.push(p1,p1+s*R(5,b-4));low=low===null?p1:sl(low,p1);lab='Pullback'}
-    else if(k==='X'){B=ctl-s*R(6,16);old=ext;p.push(B);lab='Break'}
+    else if(k==='X'){B=ctl-s*(R(6,16)+xg);old=ext;p.push(B);lab='Break'}
     else if(k==='W'){const r=-s,rng=s*(ext-ctl),e0=p[p.length-1];if(rng<20)return null;
       const ub=r*ctl-4,v0=r*e0,v1=R(v0+8,ub-4),v2=R(v0+4,v1-4),v3=R(v1+4,ub),v4=R(v2+3,v3-4),v5=r*ctl+R(6,14);
       p.push(...[v1,v2,v3,v4,v5].map(v=>r*v));s=r;ext=p[p.length-1];ctl=p[p.length-2];extI=p.length-1;low=null;lab=NAME[s]}
+    else if(k==='Y'){const r=-s,rng=s*(ext-ctl),e0=p[p.length-1];if(rng<22)return null;
+      const ub=r*ctl-4,v0=r*e0,vE=r*ctl+R(6,14);let vals,ctlV;
+      if(Math.random()<.5){ // first extreme, a pullback with small moves inside it, then a push beyond the first extreme that breaks the old trend
+        const v1=R(v0+10,ub),d1=R(v0+4,v1-7);
+        if(Math.random()<.5){vals=[v1,d1,vE];ctlV=d1}else{const u1=R(d1+3,v1-4),d2=R(v0+4,u1-3);vals=[v1,d1,u1,d2,vE];ctlV=Math.min(d1,d2)}
+      }else{ // the new trend forms inside the old control points, then runs on through them
+        const v1=R(v0+10,ub-8),d1=R(v0+4,v1-6),v3=R(v1+4,ub),d2=R(d1+3,v3-4);vals=[v1,d1,v3,d2,vE];ctlV=d2;
+      }
+      p.push(...vals.map(v=>r*v));s=r;ext=p[p.length-1];ctl=r*ctlV;extI=p.length-1;low=null;lab=NAME[s]}
     else if(k==='K'){const g=s*(old-B);if(g<10)return null;const a=R(8,g+10),b=R(4,a-4),q1=B+s*a;p.push(q1,q1-s*b);lab='Range'}
     else if(k==='T'){const seg=p.slice(extI),q=three(p[p.length-1],s,Math.min(...seg),Math.max(...seg));if(!q)return null;p.push(...q);ext=q[2];ctl=q[1];extI=p.length-1;low=null;lab='New '+NAME[s]}
     else{const g=s*(old-B);if(g<10)return null;const a=R(6,g-4);p.push(B+s*a);
-      if(k==='N'){p.push(B-s*R(5,12));s=-s;ext=p[p.length-1];ctl=p[p.length-2];extI=p.length-1;low=null;lab=NAME[s]}else lab='Bounce'}
+      if(k==='N'){p.push(B-s*(R(5,12)+xg));s=-s;ext=p[p.length-1];ctl=p[p.length-2];extI=p.length-1;low=null;lab=NAME[s]}else lab='Bounce'}
+    if(xg)gr.push({k:k==='E'?1:p.length-1,g:xg,t:exs[si].tier});
     secs.push({k,lab,end:p.length-1,tr:s});
   }
-  const sp=[...p].sort((x,y)=>x-y);for(let m=0;m<sp.length-1;m++)if(sp[m+1]-sp[m]<2)return null;
+  const sp=[...p].sort((x,y)=>x-y);for(let m=0;m<sp.length-1;m++)if(sp[m+1]-sp[m]<(ns>5?1:2))return null;
   const a=analyse(p),st=a.out;
   for(const x of secs){const e=st[x.end],want=('XFK'.includes(x.k))?'C':(x.tr>0?'U':'D');if(e!==want)return null}
+  const H0=Math.max(...p)-Math.min(...p);for(const x of gr){const q=x.g/H0;if(x.t==='V'?(q<.24||q>.42):(q<.09||q>=.24))return null}
   const f=st[st.length-1];
-  return{p,secs,cp:a.cp,cur:a.cur,ev:a.ev,hard:secs.some(x=>x.k==='T'||x.k==='W'),rel:a.cur?relevant(p,a.cp):null,ans:f==='U'?'Uptrend':f==='D'?'Downtrend':'Consolidation'};
+  return{p,secs,gr,cp:a.cp,cur:a.cur,ev:a.ev,hard:secs.some(x=>x.k==='T'||x.k==='W'||x.k==='Y'),rel:a.cur?relevant(p,a.cp):null,ans:f==='U'?'Uptrend':f==='D'?'Downtrend':'Consolidation'};
 }
-// Full chain of relevant segments for a trend, and the story of the chart as breakdown steps
+// Relevant segments of a trend: record highs (or lows) with the extreme pullback between them; small moves in between are ignored.
+// The chain starts from the earliest point (from the last control point onwards) for which the final extreme is a record.
 function chain(p,cp){
-  const sg=cp.t==='U'?1:-1,q=p.map(v=>sg*v),H=sg>0?cp.hiI:cp.loI,rec=[];let m=-Infinity;
-  for(let i=cp.Z+1;i<=H;i++)if(q[i]>q[i-1]&&q[i]>m){rec.push(i);m=q[i]}
+  const sg=cp.t==='U'?1:-1,q=p.map(v=>sg*v),H=sg>0?cp.hiI:cp.loI;
   const lw=(a,b)=>{let k=a;for(let i=a;i<=b;i++)if(q[i]<q[k])k=i;return k};
-  const o=[lw(cp.Z,rec[0])];rec.forEach((r,k)=>{o.push(r);if(k<rec.length-1)o.push(lw(r,rec[k+1]))});return o;
+  const recs=z=>{const r=[];let m=-Infinity;for(let i=z+1;i<=H;i++)if(q[i]>q[i-1]&&q[i]>m){r.push(i);m=q[i]}return r};
+  let z=cp.A??cp.Z,rec=recs(z);
+  for(let s=z;s<=H-3;s++){const r=recs(s);if(r.length>=2&&r[r.length-1]===H){z=s;rec=r;break}}
+  const o=[lw(z,rec[0])];rec.forEach((r,k)=>{o.push(r);if(k<rec.length-1)o.push(lw(r,rec[k+1]))});return o;
 }
+const relevant=(p,cp)=>chain(p,cp).slice(-4);
 function phases(c){
   const sl=[],n=c.p.length-1;let brk=null,cpB=null;
   for(const e of c.ev){
-    if(e.k==='t'){if(brk!==null){if(e.j-3>brk)sl.push({k:'c',a:brk,b:e.j-3,cp:cpB});brk=null}}
+    if(e.k==='t'){if(brk!==null){if(e.Z>brk)sl.push({k:'c',a:brk,b:e.Z,cp:cpB});brk=null}}
     else{sl.push({k:'T',cp:e.cp},{k:'B',i:e.i,cp:e.cp});brk=e.i;cpB=e.cp}
   }
   if(brk!==null){if(n>brk)sl.push({k:'c',a:brk,b:n,cp:cpB})}else sl.push({k:'T',cp:c.cp});
   return sl;
 }
 // Candlestick version: every line (point-to-point) becomes 1-3 candles whose bodies tile the move; gaps are read as same-direction candles
-const MB=4;
-function capOf(c){const S=c.p.length-1;if(S>24)return 0;let t=0;for(let k=1;k<=S;k++)t+=Math.max(1,Math.floor(Math.abs(c.p[k]-c.p[k-1])/MB));return t}
-function toCandles(c){
-  const p=c.p,S=p.length-1,cap=[],cnt=[],cd=[],last=[0];
-  for(let k=1;k<=S;k++){cap[k]=Math.max(1,Math.floor(Math.abs(p[k]-p[k-1])/MB));cnt[k]=1}
-  for(let rem=24-S;rem>0;rem--){const ks=[];for(let k=1;k<=S;k++)for(let r=cnt[k];r<cap[k];r++)ks.push(k);if(!ks.length)break;cnt[ks[Math.floor(Math.random()*ks.length)]]++}
+const MB=4,MINB=2.4,rnd=(a,b)=>a+Math.random()*(b-a);
+function capOf(c,N){const S=c.p.length-1;if(S>N)return 0;const G={};(c.gr||[]).forEach(x=>G[x.k]=x.g);let t=0;for(let k=1;k<=S;k++)t+=Math.max(1,Math.floor((Math.abs(c.p[k]-c.p[k-1])-(G[k]||0))/MB));return t}
+// Advanced mode: mostly small/medium gaps, occasional large or very large (RTH-style) ones, and a wide wick range
+function gapSize(){const r=Math.random();return r<.6?rnd(.5,2):r<.9?rnd(2,5):rnd(3,7)}
+function wickLen(){const r=Math.random();return r<.2?rnd(0,.8):r<.62?rnd(1,3):r<.88?rnd(3,8):r<.97?rnd(8,16):rnd(16,28)}
+// A gap is read as a candle that opens at the previous close and closes at the next open; this returns the real price path
+function effective(cd){
+  const runs=[],add=(f,t,ci)=>{const s=t>f?1:-1,r=runs[runs.length-1];if(r&&r.s===s){r.t=t;r.ci=ci}else runs.push({f,t,ci,s})};
+  cd.forEach((k,i)=>{if(i&&Math.abs(k.o-cd[i-1].c)>1e-9)add(cd[i-1].c,k.o,i);if(Math.abs(k.c-k.o)>1e-9)add(k.o,k.c,i)});
+  return{p:[cd[0].o,...runs.map(r=>r.t)],ptc:[0,...runs.map(r=>r.ci)]};
+}
+function convert(c,N,adv,cx){
+  const p=c.p,S=p.length-1,cap=[],cnt=[],cd=[],last=[0],gsz=()=>adv?gapSize(false):rnd(1,1.8),gp=adv?.3:.22,GR={};
+  (c.gr||[]).forEach(x=>GR[x.k]=x.g);
+  for(let k=1;k<=S;k++){cap[k]=Math.max(1,Math.floor((Math.abs(p[k]-p[k-1])-(GR[k]||0))/MB));cnt[k]=1}
+  for(let rem=N-S;rem>0;rem--){const ks=[];for(let k=1;k<=S;k++)for(let r=cnt[k];r<cap[k];r++)ks.push(k);if(!ks.length)break;cnt[ks[Math.floor(Math.random()*ks.length)]]++}
   for(let k=1;k<=S;k++){
-    const a=p[k-1],b=p[k],d=b>a?1:-1,mv=Math.abs(b-a),n=cnt[k],lv=[a];
-    for(let j=1;j<n;j++)lv.push(a+d*mv*(j+(Math.random()-.5)*.3)/n);
-    lv.push(b);
-    for(let j=0;j<n;j++)cd.push({o:lv[j],c:lv[j+1],d});
-    last[k]=cd.length-1;
+    const a=p[k-1],b=p[k],d=b>a?1:-1,mv=Math.abs(b-a),n=cnt[k],G=GR[k]||0;let tmp,st=0,en=0,inn=-1;
+    // a big gap sits inside the move, at its start (opening gap) or at its end
+    if(G){const o=[];if(n>=2)o.push(0);if(k>1)o.push(1);if(k<S)o.push(2);const pl=o[Math.floor(Math.random()*o.length)];if(pl===1)st=G;else if(pl===2)en=G;else inn=Math.floor(Math.random()*(n-1))}
+    for(let neg=cx;;neg=false){
+      // gaps between candles of one move may go with the move (+) or against it (-)
+      const sg=[];for(let j=0;j<n-1;j++){const g=j===inn?G:(Math.random()<gp?gsz():0);sg.push(g&&neg&&j!==inn&&Math.random()<.4?-g:g)}
+      let sp=0,sn=0;sg.forEach((s,j)=>{if(j!==inn){s>0?sp+=s:sn+=s}});
+      const room=mv-n*MINB-sn-st-en-(inn>=0?G:0);if(sp>room){const f=Math.max(0,room)/sp;for(let j=0;j<sg.length;j++)if(sg[j]>0&&j!==inn)sg[j]*=f}
+      const w=Array.from({length:n},()=>rnd(.6,1.4)),ws=w.reduce((x,y)=>x+y,0),T=mv-sg.reduce((x,y)=>x+y,0)-st-en;
+      let pos=a+d*st,ok=true;tmp=[];
+      for(let j=0;j<n;j++){const bd=MINB+(T-n*MINB)*w[j]/ws,cl=pos+d*bd;tmp.push({o:pos,c:cl,d});
+        if(j<n-1){if(d*(b-cl)<.4)ok=false;pos=cl+d*(sg[j]||0);if(d*(pos-a)<.6)ok=false}}
+      if(ok||!neg)break;
+    }
+    tmp[tmp.length-1].c=b-d*en;cd.push(...tmp);last[k]=cd.length-1;
   }
-  const gap=new Set();
-  for(let i=0;i<cd.length-1;i++)if(Math.abs(cd[i].c-cd[i].o)>=4.4&&Math.random()<.25){cd[i].c-=cd[i].d*(1+Math.random()*.8);gap.add(i)}
-  c.ptc=last.map((li,k)=>k>0&&gap.has(li)?li+1:li);
-  cd.forEach(k=>{k.hi=Math.max(k.o,k.c)+(Math.random()<.2?0:1+Math.random()*4);k.lo=Math.min(k.o,k.c)-(Math.random()<.2?0:1+Math.random()*4)});
-  c.cd=cd;return c;
+  // gaps at a change of direction: with the candle before it, or with the candle after it
+  for(let k=1;k<S;k++){const i=last[k];if(Math.random()<gp){const g0=gsz();
+    if(Math.random()<.5){const g=Math.min(g0,Math.abs(cd[i].c-cd[i].o)-MINB);if(g>=.8)cd[i].c-=cd[i].d*g}
+    else{const q=cd[i+1],g=Math.min(g0,Math.abs(q.c-q.o)-MINB);if(g>=.8)q.o+=q.d*g}}}
+  cd.forEach(k=>{k.hi=Math.max(k.o,k.c)+(adv?wickLen():Math.random()<.2?0:1+Math.random()*4);k.lo=Math.min(k.o,k.c)-(adv?wickLen():Math.random()<.2?0:1+Math.random()*4)});
+  return{cd,e:effective(cd)};
+}
+// A gap against the move adds real turning points, so the chart is re-analysed and only kept if the story is unchanged
+function toCandles(c,N,adv){
+  const a0=analyse(c.p),k0=phases({p:c.p,ev:a0.ev,cp:a0.cp}).map(s=>s.k).join('');
+  for(let t=0;t<16;t++){
+    const r=convert(c,N,adv,t<10),e=r.e,same=e.p.length===c.p.length&&e.p.every((v,i)=>Math.abs(v-c.p[i])<1e-6);
+    let a2=a0;
+    if(!same){a2=analyse(e.p);const f=a2.out[a2.out.length-1],ans=f==='U'?'Uptrend':f==='D'?'Downtrend':'Consolidation';
+      if(ans!==c.ans||a2.cp.t!==c.cp.t||Math.abs(a2.cp.hi-c.cp.hi)>1e-6||Math.abs(a2.cp.lo-c.cp.lo)>1e-6||phases({p:e.p,ev:a2.ev,cp:a2.cp}).map(s=>s.k).join('')!==k0)continue}
+    c.cd=r.cd;c.ptc=e.ptc;
+    if(!same){c.p=e.p;c.cp=a2.cp;c.cur=a2.cur;c.ev=a2.ev;c.rel=a2.cur?relevant(e.p,a2.cp):null}
+    return c;
+  }
 }
 function quiz(m){
+  const adv=m==='adv',N=adv?36:24,cn=m!=='line',ns=()=>adv?R(7,8):5;
   let nu,nd,nc;do{nu=R(2,5);nd=R(2,5);nc=10-nu-nd}while(nc<1||nc>3);
   const want=[...Array(nu).fill('Uptrend'),...Array(nd).fill('Downtrend'),...Array(nc).fill('Consolidation')].sort(()=>Math.random()-.5);
-  const ix=want.map((_,i)=>i).sort(()=>Math.random()-.5),f=ix.find(k=>want[k]!=='Consolidation'),hs=[f,...ix.filter(k=>k!==f).slice(0,R(1,2))];
-  const out=want.map((w,i)=>{const need=hs.includes(i);let c,g=0;do{c=build(i===hs[0]);g++}while((!c||c.ans!==w||(m==='candle'&&capOf(c)<24)||(need&&!(i===hs[0]?c.secs.some(x=>x.k==='W'):c.hard)))&&g<30000);while(!c||c.ans!==w||(m==='candle'&&capOf(c)<24))c=build();return c});
-  return m==='candle'?out.map(toCandles):out;
+  const ix=want.map((_,i)=>i).sort(()=>Math.random()-.5),f=ix.find(k=>want[k]!=='Consolidation'),rest=ix.filter(k=>k!==f),hs=[f,...rest.slice(0,R(1,2))],hc=rest[Math.floor(Math.random()*rest.length)];
+  // each Advanced chart independently has ~20% chance of a gap over 20% of its height (larger gaps rarer), ~30% of a 9-20% gap; several are possible
+  const mkPlan=()=>{const a=Math.random(),v=a<.79?0:a<.95?1:2,b=Math.random(),l=b<.65?0:b<.93?1:2,o=[];
+    for(let j=0;j<v;j++)o.push({tier:'V',r:.24+.18*Math.pow(Math.random(),2)});for(let j=0;j<l;j++)o.push({tier:'L',r:.09+.15*Math.pow(Math.random(),1.5)});return o};
+  const pl=want.map(()=>adv?mkPlan():[]);
+  [hc,f].forEach(k=>{if(pl[k].length){const j=ix.find(x=>!pl[x].length&&x!==hc&&x!==f);if(j!==undefined)[pl[k],pl[j]]=[pl[j],pl[k]]}});  // keep the guaranteed special charts free of big-gap plans
+  const hasC=c=>phases(c).some(s=>s.k==='c');
+  const ok=(c,i,w,strict)=>c&&c.ans===w&&(!cn||capOf(c,N)>=N)&&(!strict||((i!==hs[0]||c.secs.some(x=>x.k==='W'))&&(!hs.includes(i)||i===hs[0]||c.hard)&&(i!==hc||hasC(c))))&&(!cn||!!toCandles(c,N,adv));
+  const out=want.map((w,i)=>{let c,g=0,done=false;do{c=build(i===hs[0],ns(),pl[i]);g++;done=!!ok(c,i,w,true)}while(!done&&g<40000);if(!done)do{c=build(false,ns())}while(!ok(c,i,w,false));return c});
+  return out;
 }
 function why(c){
   const x=c.secs[c.secs.length-1],tn=NAME[x.tr].toLowerCase(),hl=x.tr>0?'a higher high and higher low':'a lower high and lower low';
@@ -152,12 +211,13 @@ function why(c){
    N:`After the break, the market formed ${hl}, completing three directional segments: a new ${tn}.`,
    T:`After the break, the market formed ${hl} inside the range of the break and consolidation, completing three directional segments: a new ${tn}.`,
    W:`Measured from the last control point, the market had already formed ${hl} while still inside the old control points. Closing beyond them broke the old trend and confirmed the new ${tn}.`,
+   Y:`Measured from the last control point, the market formed ${hl} (ignoring the small moves in between) while still inside the old control points. Closing beyond them broke the old trend and confirmed the new ${tn}.`,
    F:`After the break there is only a single counter-segment. Three directional segments haven't formed yet, so the market is still in consolidation.`}[x.k];
 }
 //UI
 let mode=null,Q=[],i=0,score=0,log=[],step=0;
 const $=document.getElementById('app'),TT=document.getElementById('ttl'),SB=document.getElementById('sub');
-const MODES={line:'Line Chart',candle:'Candlestick Chart'},NM=t=>t==='U'?['Higher High','Higher Low']:['Lower High','Lower Low'];
+const MODES={line:'Line Chart',candle:'Candlestick Chart',adv:'Advanced Candlestick Chart'},NM=t=>t==='U'?['Higher High','Higher Low']:['Lower High','Lower Low'];
 function menu(){
   mode=null;TT.textContent='Trend Quiz';SB.textContent='Choose a quiz.';
   $.innerHTML=`<div class="menu">${Object.keys(MODES).map(k=>`<button class="mc" data-m="${k}">${MODES[k]}</button>`).join('')}</div>`;
@@ -173,7 +233,7 @@ function base(c,G,op){
   let g=`<g opacity="${op}">`;
   if(G.L){const bw=Math.min(24,G.pt*.64);
     G.L.forEach((k,j)=>{const x=G.x0+j*G.pt,col=k.d>0?'#22a95f':'#e43e53',t=G.Y(Math.max(k.o,k.c)),b=G.Y(Math.min(k.o,k.c));
-      g+=`<line x1="${x}" x2="${x}" y1="${G.Y(k.hi)}" y2="${G.Y(k.lo)}" stroke="${col}" stroke-width="2.5"/><rect x="${x-bw/2}" y="${t}" width="${bw}" height="${Math.max(2,b-t)}" fill="${col}"/>`})}
+      g+=`<line x1="${x}" x2="${x}" y1="${G.Y(k.hi)}" y2="${G.Y(k.lo)}" stroke="${col}" stroke-width="2.5"/><rect x="${x-bw/2}" y="${t}" width="${bw}" height="${Math.max(3,b-t)}" fill="${col}"/>`})}
   else g+=`<polyline fill="none" stroke="var(--ink)" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" points="${c.p.map((v,k)=>G.X(k)+','+G.Y(v)).join(' ')}"/>`;
   return g+'</g>';
 }
@@ -216,6 +276,39 @@ function bd(){
   document.getElementById('bdv').innerHTML=`<div class="card"><div class="cnt">Breakdown · step ${step+1} of ${sl.length}</div>${slide(c,s)}</div><p class="cap">${caption(c,s,step===sl.length-1)}</p><div class="row"><button class="next alt" id="bp" ${step?'':'disabled'}>‹ Previous</button><button class="next alt" id="bn" ${step<sl.length-1?'':'disabled'}>Next ›</button></div>`;
   document.getElementById('bp').onclick=()=>{step--;bd()};document.getElementById('bn').onclick=()=>{step++;bd()};
 }
+// Draw / erase tool drawn on a canvas over the chart, with undo and redo
+const DR={tool:null,color:'#ef4444',size:5,st:[],rd:[]},COLS=['#ef4444','#f59e0b','#22c55e','#1d9bf0','#8b5cf6','ink'];
+const toolbar=()=>`<div class="tools"><button class="tb" id="tpen">✏️ Draw</button><button class="tb" id="ter">🧽 Erase</button><select id="tsz" class="tb" aria-label="Brush size"><option value="2">Fine</option><option value="5">Medium</option><option value="10">Thick</option><option value="18">Extra thick</option></select>${COLS.map((c,k)=>`<button class="sw" data-c="${c}" style="background:${c==='ink'?'var(--ink)':c}" aria-label="Colour ${k+1}"></button>`).join('')}<span class="sp"></span><button class="tb" id="tun">↶ Undo</button><button class="tb" id="tre">↷ Redo</button><button class="tb" id="tcl">🗑 Clear</button></div>`;
+function drawInit(){
+  DR.st=[];DR.rd=[];
+  const cv=document.getElementById('cv'),box=document.getElementById('chw'),ctx=cv.getContext('2d'),g=id=>document.getElementById(id);let cur=null,F;
+  // Strokes are stored relative to the chart picture, so they keep their place and size when the screen is rotated or resized
+  const ref=()=>{const a=box.querySelector('svg').getBoundingClientRect(),c=cv.getBoundingClientRect();return{x:a.left-c.left,y:a.top-c.top,w:a.width,h:a.height}};
+  const px=q=>[F.x+q[0]*F.w,F.y+q[1]*F.h];
+  const seg=(s,a,b)=>{const A=px(a),B=px(b);ctx.globalCompositeOperation=s.e?'destination-out':'source-over';ctx.strokeStyle=s.e?'#000':s.c;ctx.lineWidth=s.w*F.w;ctx.lineCap=ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0]+.01,B[1]+.01);ctx.stroke()};
+  const upd=()=>{g('tpen').classList.toggle('on',DR.tool==='pen');g('ter').classList.toggle('on',DR.tool==='er');g('tsz').value=DR.size;
+    document.querySelectorAll('.sw').forEach(b=>b.classList.toggle('on',b.dataset.c===DR.color));
+    g('tun').disabled=!DR.st.length;g('tre').disabled=!DR.rd.length;g('tcl').disabled=!DR.st.length||!!DR.st[DR.st.length-1].x;
+    cv.style.pointerEvents=DR.tool?'auto':'none';cv.style.touchAction=DR.tool?'none':'auto';cv.style.cursor=DR.tool?'crosshair':'default'};
+  const wipe=()=>{ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);ctx.restore()};
+  const redraw=()=>{F=ref();wipe();DR.st.forEach(s=>s.x?wipe():s.p.forEach((q,k)=>seg(s,s.p[Math.max(0,k-1)],q)));upd()};
+  const fit=()=>{const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1;cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);ctx.setTransform(d,0,0,d,0,0);redraw()};
+  const pt=e=>{const c=cv.getBoundingClientRect();return[(e.clientX-c.left-F.x)/F.w,(e.clientY-c.top-F.y)/F.h]};
+  cv.onpointerdown=e=>{if(!DR.tool)return;F=ref();cv.setPointerCapture(e.pointerId);const er=DR.tool==='er',q=pt(e);
+    cur={e:er,c:er?null:(DR.color==='ink'?getComputedStyle(document.body).color:DR.color),w:(er?DR.size*3:DR.size)/F.w,p:[q]};
+    DR.st.push(cur);DR.rd=[];seg(cur,q,q);upd();e.preventDefault()};
+  cv.onpointermove=e=>{if(!cur)return;const q=pt(e);seg(cur,cur.p[cur.p.length-1],q);cur.p.push(q)};
+  cv.onpointerup=cv.onpointercancel=()=>{cur=null};
+  g('tpen').onclick=()=>{DR.tool=DR.tool==='pen'?null:'pen';upd()};
+  g('ter').onclick=()=>{DR.tool=DR.tool==='er'?null:'er';upd()};
+  g('tsz').onchange=e=>{DR.size=+e.target.value;upd()};
+  document.querySelectorAll('.sw').forEach(b=>b.onclick=()=>{DR.color=b.dataset.c;if(DR.tool!=='pen')DR.tool='pen';upd()});
+  g('tun').onclick=()=>{if(DR.st.length){DR.rd.push(DR.st.pop());redraw()}};
+  g('tre').onclick=()=>{if(DR.rd.length){DR.st.push(DR.rd.pop());redraw()}};
+  g('tcl').onclick=()=>{const l=DR.st[DR.st.length-1];if(DR.st.length&&!(l&&l.x)){DR.st.push({x:1});DR.rd=[];redraw()}};  // clearing can be undone
+  if(window.ResizeObserver)new ResizeObserver(fit).observe(box);
+  fit();
+}
 function show(){
   if(i>=10){
     $.innerHTML=`<div class="card" style="text-align:center"><div class="sub">${MODES[mode]} quiz complete</div><div class="big">${score} / 10</div><p>${score>=9?'Excellent trend reading.':score>=7?'Solid. Review the questions you missed below.':'Keep practising: revisit the control point and break rules.'}</p></div>`+
@@ -225,9 +318,9 @@ function show(){
   }
   const c=Q[i];
   $.innerHTML=`<div class="top"><span>Question ${i+1} of 10</span><span><button class="link" id="mn">Menu</button> · Score ${score}</span></div><div class="bar"><i style="width:${i*10}%"></i></div>
-  <div class="card" id="ch">${chart(c,false)}</div><div class="q">What state is the market in at the end of this chart?</div>
+  <div class="card" id="chw" style="position:relative"><div id="ch">${chart(c,false)}</div><canvas id="cv"></canvas></div>${toolbar()}<div class="q">What state is the market in at the end of this chart?</div>
   <div class="opts">${['Uptrend','Downtrend','Consolidation'].map(o=>`<button data-o="${o}">${o}</button>`).join('')}</div><div id="fb"></div><div id="bdv"></div>`;
-  document.getElementById('mn').onclick=menu;
+  document.getElementById('mn').onclick=menu;drawInit();
   $.querySelectorAll('.opts button').forEach(b=>b.onclick=()=>answer(b.dataset.o));
 }
 function answer(o){
