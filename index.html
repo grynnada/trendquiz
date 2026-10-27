@@ -73,7 +73,7 @@ function analyse(p){
   }
   return {out,cp,cur:st!=='C',ev};
 }
-// Chart builder: 5 sections following the notes' rules; the engine verifies every section
+// Chart builder: 5 sections per chart (7-8 in Advanced) following the notes' rules; the engine verifies every section
 const HB=67; // typical chart height (body range) used to size big gaps
 function build(fw,ns=5,plan=[]){
   const t=['E'];
@@ -137,10 +137,12 @@ function phases(c){
   if(brk!==null){if(n>brk)sl.push({k:'c',a:brk,b:n,cp:cpB})}else sl.push({k:'T',cp:c.cp});
   return sl;
 }
-// Candlestick version: every line (point-to-point) becomes 1-3 candles whose bodies tile the move; gaps are read as same-direction candles
+// Candlestick version: every line (point-to-point) becomes one or more candles whose bodies tile the move. The chart gets exactly 24 candles
+// (36 in Advanced) spread across its moves, each candle at least ~4 units tall, so a move can hold many candles.
+// A gap is read as a candle filling it, and can go with or against the move.
 const MB=4,MINB=2.4,MINBR=5,rnd=(a,b)=>a+Math.random()*(b-a);
 function capOf(c,N){const S=c.p.length-1;if(S>N)return 0;const G={};(c.gr||[]).forEach(x=>G[x.k]=x.g);let t=0;for(let k=1;k<=S;k++)t+=Math.max(1,Math.floor((Math.abs(c.p[k]-c.p[k-1])-(G[k]||0))/MB));return t}
-// Advanced mode: mostly small/medium gaps, occasional large or very large (RTH-style) ones, and a wide wick range
+// Random gaps are small or medium (big RTH-style gaps come from the per-chart plan in quiz()); Advanced charts also get a wide wick range
 function gapSize(){const r=Math.random();return r<.6?rnd(2.5,4):r<.9?rnd(4,8):rnd(5,9)}
 function wickLen(){const r=Math.random();return r<.2?rnd(0,.8):r<.62?rnd(1,3):r<.88?rnd(3,8):r<.97?rnd(8,16):rnd(16,28)}
 // A gap is read as a candle that opens at the previous close and closes at the next open; this returns the real price path
@@ -203,7 +205,7 @@ function quiz(m){
   let nu,nd,nc;do{nu=R(2,5);nd=R(2,5);nc=10-nu-nd}while(nc<1||nc>3);
   const want=[...Array(nu).fill('Uptrend'),...Array(nd).fill('Downtrend'),...Array(nc).fill('Consolidation')].sort(()=>Math.random()-.5);
   const ix=want.map((_,i)=>i).sort(()=>Math.random()-.5),f=ix.find(k=>want[k]!=='Consolidation'),rest=ix.filter(k=>k!==f),hs=[f,...rest.slice(0,R(1,2))],hc=rest[Math.floor(Math.random()*rest.length)];
-  // each Advanced chart independently has ~20% chance of a gap over 20% of its height (larger gaps rarer), ~30% of a 9-20% gap; several are possible
+  // each Advanced chart independently has about a 20% chance of a gap over 20% of its height (larger gaps rarer) and ~30% of a 9-24% gap; several are possible
   const mkPlan=()=>{const a=Math.random(),v=a<.79?0:a<.95?1:2,b=Math.random(),l=b<.65?0:b<.93?1:2,o=[];
     for(let j=0;j<v;j++)o.push({tier:'V',r:.24+.18*Math.pow(Math.random(),2)});for(let j=0;j<l;j++)o.push({tier:'L',r:.09+.15*Math.pow(Math.random(),1.5)});return o};
   const pl=want.map(()=>adv?mkPlan():[]);
@@ -236,7 +238,7 @@ function menu(){
 }
 function start(m){mode=m;Q=quiz(m);i=0;score=0;log=[];TT.textContent='Trend Quiz: '+MODES[m];SB.textContent='';show()}
 function geom(c){
-  const W=700,H=470,L=c.cd,P=c.gp||c.p,n=P.length,mn=L?Math.min(...L.map(k=>k.lo)):Math.min(...P),mx=L?Math.max(...L.map(k=>k.hi)):Math.max(...P);
+  const W=700,H=470,L=c.cd,n=c.p.length,mn=L?Math.min(...L.map(k=>k.lo)):Math.min(...c.p),mx=L?Math.max(...L.map(k=>k.hi)):Math.max(...c.p);
   const N=L?L.length:n,x0=L?48:40,pt=(W-2*x0)/Math.max(N-1,1);
   return{W,H,L,pt,Y:v=>30+(mx-v)*(H-100)/(mx-mn),X:k=>x0+(L?c.ptc[k]:k)*pt,x0};
 }
@@ -258,7 +260,7 @@ function ctl(c,G,cp,cur){
     g+=`<line x1="${x}" x2="${G.W-12}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2.5" stroke-dasharray="8 6"/><circle cx="${x}" cy="${y}" r="6" fill="${col}" stroke="var(--card)" stroke-width="2"/><text x="${G.W-14}" y="${y+dy}" text-anchor="end" font-size="15" font-weight="700" fill="${tc}" stroke="var(--card)" stroke-width="4" style="paint-order:stroke">${cur?'':'Previous '}Control Point (${t})</text>`});
   return g;
 }
-const legend=(G,col,t,row=0)=>`<line x1="40" x2="72" y1="${G.H-22-row*24}" y2="${G.H-22-row*24}" stroke="${col}" stroke-width="6" stroke-linecap="round"/><text x="80" y="${G.H-16-row*24}" font-size="15" font-weight="700" fill="${col}">${t}</text>`;
+const legend=(G,col,t)=>`<line x1="40" x2="72" y1="${G.H-22}" y2="${G.H-22}" stroke="${col}" stroke-width="6" stroke-linecap="round"/><text x="80" y="${G.H-16}" font-size="15" font-weight="700" fill="${col}">${t}</text>`;
 const wrap=(G,c,g)=>`<svg viewBox="0 0 ${G.W} ${G.H}" role="img" aria-label="${G.L?'Candlestick':'Line'} chart">${g}</svg>`;
 function chart(c,reveal,vis=Infinity){
   const G=geom(c),full=vis>=(c.cd?c.cd.length:c.p.length);let g=base(c,G,1,vis);
@@ -324,8 +326,8 @@ function drawInit(){
 // Replay slider: hides everything to the right of it and snaps to each point (line charts) or each gap between candles
 let REV=false,VP=Infinity;
 const SG=c=>{const W=700,L=c.cd,N=L?L.length:c.p.length,x0=L?48:40,pt=(W-2*x0)/Math.max(N-1,1);return{W,min:L?1:2,max:N,x:v=>L?x0+(v-.5)*pt:x0+(v-1)*pt,unit:L?'candles':'points'}};
-const sliderHtml=(c,id='sl',val,tid='slt')=>{const g=SG(c),l=g.x(g.min)/g.W*100,r=(g.W-g.x(g.max))/g.W*100;
-  return `<div class="slw"><input type="range" id="${id}" min="${g.min}" max="${g.max}" step="1" value="${val??g.max}" aria-label="Show the chart up to this position" style="width:calc(${100-l-r}% + 28px);margin-left:calc(${l}% - 14px)"><div class="slt" id="${tid}"></div></div>`};
+const sliderHtml=c=>{const g=SG(c),l=g.x(g.min)/g.W*100,r=(g.W-g.x(g.max))/g.W*100;
+  return `<div class="slw"><input type="range" id="sl" min="${g.min}" max="${g.max}" step="1" value="${g.max}" aria-label="Show the chart up to this position" style="width:calc(${100-l-r}% + 28px);margin-left:calc(${l}% - 14px)"><div class="slt" id="slt"></div></div>`};
 function sliderReset(c){const g=SG(c),s=document.getElementById('sl');s.value=g.max;VP=g.max;document.getElementById('slt').textContent=`Showing ${g.max} of ${g.max} ${g.unit}`}
 function sliderInit(c){
   const g=SG(c),s=document.getElementById('sl'),t=document.getElementById('slt');REV=false;VP=g.max;
