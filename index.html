@@ -125,7 +125,11 @@ function chain(p,cp){
   const recs=z=>{const r=[];let m=-Infinity;for(let i=z+1;i<=H;i++)if(q[i]>q[i-1]&&q[i]>m){r.push(i);m=q[i]}return r};
   let z=cp.CZ??cp.A??cp.Z,rec=recs(z);
   if(!(rec.length>=2&&rec[rec.length-1]===H))for(let s=cp.A??cp.Z;s<=H-3;s++){const r=recs(s);if(r.length>=2&&r[r.length-1]===H){z=s;rec=r;break}}
-  const o=[lw(z,rec[0])];rec.forEach((r,k)=>{o.push(r);if(k<rec.length-1)o.push(lw(r,rec[k+1]))});return o;
+  const o=[lw(z,rec[0])];rec.forEach((r,k)=>{o.push(r);if(k<rec.length-1)o.push(lw(r,rec[k+1]))});
+  // a pullback extreme must not be passed by a later one (a high followed by a higher high in a downtrend, a low followed by a lower low
+  // in an uptrend): the segments before it are not relevant, so the chain starts again from that point
+  let s0=0;for(let e=2;e<o.length;e+=2)if(q[o[e]]<q[o[e-2]])s0=e;
+  return o.slice(s0);
 }
 const relevant=(p,cp)=>chain(p,cp).slice(-4);
 function phases(c){
